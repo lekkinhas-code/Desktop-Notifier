@@ -26,7 +26,6 @@ WHITE_ICON_PATH = os.path.join(BASE_DIR, "image/alarm_icon_white.ico")
 class MainWindow(QMainWindow):
     def __init__(self):
         self.mutex_name = "Global\\DesktopNotifier_SingleInstance_Mutex_Lock"
-
         # CreateMutexW returns a handle to a new or existing mutex object
         self.mutex = ctypes.windll.kernel32.CreateMutexW(None, False, self.mutex_name)
         last_error = ctypes.windll.kernel32.GetLastError()
@@ -49,6 +48,21 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
+
+        style_file_path = os.path.join(BASE_DIR, "style.qss")
+        if os.path.exists(style_file_path):
+            try:
+                with open(style_file_path, "r", encoding="utf-8") as f:
+                    self.setStyleSheet(f.read())
+            except Exception as e:
+                print(f"[UI Warning] Failed to read style.qss: {e}")
+
+        icon_to_use = WHITE_ICON_PATH if self.is_dark_mode() else BLACK_ICON_PATH
+        if not icon_to_use:
+            print(f"[Icon Missing] Not found at: {icon_to_use}.")
+
+        if os.path.exists(icon_to_use):
+            self.setWindowIcon(QIcon(icon_to_use))
 
         self.ui.Alert_timeEdit.setTime(QTime.currentTime())
         self.alarms = []
