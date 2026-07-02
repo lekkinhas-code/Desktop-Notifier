@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QAbstractItemView,
 )
 from PyQt6.QtGui import QStandardItemModel, QStandardItem, QIcon
-from PyQt6.QtCore import QTime
+from PyQt6.QtCore import QTime, qInstallMessageHandler
 from gui import Ui_MainWindow
 from alarm_model import Alarm
 
@@ -22,9 +22,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PKL_FILE = os.path.join(BASE_DIR, "Desktop-Notifier/alarms.pkl")
 BLACK_ICON_PATH = os.path.join(BASE_DIR, "image/alarm_icon.ico")
 WHITE_ICON_PATH = os.path.join(BASE_DIR, "image/alarm_icon_white.ico")
+DARK_THEME = os.path.join(BASE_DIR, "UI/style/darkTheme_styles.qss")
+LIGHT_THEME = os.path.join(BASE_DIR, "UI/style/lightTheme_styles.qss")
 
 
 class MainWindow(QMainWindow):
+
     def __init__(self):
         self.mutex_name = "Global\\DesktopNotifier_SingleInstance_Mutex_Lock"
         # CreateMutexW returns a handle to a new or existing mutex object
@@ -50,13 +53,8 @@ class MainWindow(QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
-        style_file_path = os.path.join(BASE_DIR, "UI/style/style.qss")
-        if os.path.exists(style_file_path):
-            try:
-                with open(style_file_path, "r", encoding="utf-8") as f:
-                    self.setStyleSheet(f.read())
-            except Exception as e:
-                print(f"[UI Warning] Failed to read style.qss: {e}")
+        style_file_path = os.path.join(BASE_DIR, "UI/style/darkTheme_styles.qss")
+        load_stylesheet(QApplication.instance(), style_file_path)
 
         icon_to_use = WHITE_ICON_PATH if self.is_dark_mode() else BLACK_ICON_PATH
         if not icon_to_use:
@@ -97,6 +95,10 @@ class MainWindow(QMainWindow):
         self.ui.Delete_pushButton.clicked.connect(self.delete_alarm)
         self.ui.Diary_radioButton.toggled.connect(self.toggle_days_input)
 
+        # Theme Selector Connections & Startup State
+        self.ui.Theme_comboBox.setCurrentText("Dark Mode")
+        self.ui.Theme_comboBox.currentTextChanged.connect(self.on_theme_changed)
+
         # Tabs
         self.ui.actionAlarms_Dashboard.triggered.connect(
             lambda: self.ui.mainStackedWidget.setCurrentIndex(0)
@@ -121,6 +123,22 @@ class MainWindow(QMainWindow):
         except FileNotFoundError:
             return False
 
+    def on_theme_changed(self, selected_text):
+        """Slot function triggered when the user picks a new theme in the combobox."""
+        app_instance = QApplication.instance()
+        if selected_text == "Dark Mode":
+            style_file_path = os.path.join(BASE_DIR, DARK_THEME)
+            load_stylesheet(app_instance, style_file_path)
+        elif selected_text == "Light Mode":
+            style_file_path = os.path.join(BASE_DIR, LIGHT_THEME)
+            load_stylesheet(app_instance, style_file_path)
+        elif selected_text == "System Default":
+            if self.is_dark_mode():
+                style_file_path = os.path.join(BASE_DIR, DARK_THEME)
+            else:
+                style_file_path = os.path.join(BASE_DIR, LIGHT_THEME)
+            load_stylesheet(app_instance, style_file_path)
+
     def init_system_tray(self):
         """Creates the hidden tray icon and its right-click menu."""
         self.tray_icon = QSystemTrayIcon(self)
@@ -139,8 +157,6 @@ class MainWindow(QMainWindow):
                     self.style().StandardPixmap.SP_MessageBoxInformation
                 )
             )
-
-        # self.tray_icon.setIcon(self.style().standardIcon(self.style().StandardPixmap.SP_MessageBoxWarning))
 
         # Create a right-click context menu for the hidden icon
         tray_menu = QMenu()
@@ -278,7 +294,35 @@ class MainWindow(QMainWindow):
             print(f"[GUI ERROR] Could not find worker.py at target path: {worker_path}")
 
 
+def load_stylesheet(app, filename="darkTheme_styles.qss"):
+    """Safely loads and applies a QSS stylesheet or clears it if filename is None."""
+    if os.path.isabs(filename):
+        file_path = filename
+    else:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(script_dir, filename)
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            app.setStyleSheet(f.read())
+    except FileNotFoundError:
+        print(
+            f"Warning: Stylesheet could not be found at {file_path}. Using default system theme."
+        )
+        app.setStyleSheet("")
+
+
+def qt_message_filter(msg_type, context, message):
+    """Intercepts and deletes the harmless font point-size warning."""
+    if "QFont::setPointSize" in message:
+        return  # Drop this warning silently
+
+    # Let all other real errors/warnings print normally
+    sys.stderr.write(f"{message}\n")
+
+
 if __name__ == "__main__":
+    qInstallMessageHandler(qt_message_filter)  # Install the custom message filter
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
