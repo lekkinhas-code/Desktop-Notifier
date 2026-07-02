@@ -1,0 +1,352 @@
+/* ==========================================================
+   Remind Me — theme
+   Palette: night-sky base + amber "sunrise" accent
+   #14161F  app background
+   #1C1F2B  card / panel background
+   #262A3A  input background
+   #2E3345  borders / dividers
+   #EDEFF5  primary text
+   #8A90A3  secondary text
+   #F5A623  accent (amber)
+   #D98A12  accent hover/pressed
+   #E5484D  danger (delete)
+   ========================================================== */
+
+* {
+    font-family: "Segoe UI", "Inter", "Helvetica Neue", sans-serif;
+    outline: none;
+    font-size:13px
+}
+
+QMainWindow, QWidget#centralwidget {
+    background-color: #14161F;
+}
+
+QStatusBar {
+    background-color: #14161F;
+    color: #8A90A3;
+    border-top: 1pt solid #2E3345;
+}
+
+/* ---------------- Menu bar ---------------- */
+
+QMenuBar {
+    background-color: #14161F;
+    color: #EDEFF5;
+    padding: 4px 8px;
+    border-bottom: 1px solid #2E3345;
+}
+
+QMenuBar::item {
+    background: transparent;
+    padding: 6px 12px;
+    border-radius: 6px;
+}
+
+QMenuBar::item:selected {
+    background-color: #1C1F2B;
+    color: #F5A623;
+}
+
+QMenu {
+    background-color: #1C1F2B;
+    color: #EDEFF5;
+    border: 1px solid #2E3345;
+    border-radius: 8px;
+    padding: 6px;
+}
+
+QMenu::item {
+    padding: 8px 20px;
+    border-radius: 6px;
+}
+
+QMenu::item:selected {
+    background-color: #262A3A;
+    color: #F5A623;
+}
+
+/* ---------------- Panels (sidebar / form cards) ---------------- */
+
+QFrame {
+    background-color: #1C1F2B;
+    border: 1px solid #2E3345;
+    border-radius: 14px;
+}
+
+/* ---------------- Labels ---------------- */
+
+QLabel {
+    color: #8A90A3;
+    font-size: 13px;
+    background: transparent;
+    border: none;
+}
+
+QLabel#Title_label,#Sidebar_label,#SettingsTitle_label {
+    color: #EDEFF5;
+    font-size: 22px;
+    font-weight: 700;
+}
+
+/* QLabel#Sidebar_label {
+    color: #EDEFF5;
+    font-size: 15px;
+    font-weight: 600;
+    padding-bottom: 2px;
+} */
+
+/* ---------------- Inputs ---------------- */
+
+QLineEdit, QTimeEdit {
+    background-color: #262A3A;
+    color: #EDEFF5;
+    border: 1px solid #2E3345;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+    selection-background-color: #F5A623;
+    selection-color: #14161F;
+}
+
+QLineEdit:hover, QTimeEdit:hover {
+    border: 1px solid #3B4157;
+}
+
+QLineEdit:focus, QTimeEdit:focus {
+    border: 1px solid #F5A623;
+    background-color: #20232F;
+}
+
+QLineEdit::placeholder {
+    color: #565C70;
+}
+
+QTimeEdit::up-button, QTimeEdit::down-button {
+    width: 16px;
+    border: none;
+    background: transparent;
+}
+
+QTimeEdit::up-arrow {
+    image: url("Desktop-Notifier/UI/images/up_arrow_white.svg");
+    background: transparent;
+    width: 12px;
+    height: 19px;
+    padding-left: 1px;
+    border-left: 1px solid #EDEFF5;
+}
+
+QTimeEdit::down-arrow {
+    image: url("Desktop-Notifier/UI/images/down_arrow_white.svg");
+    background: transparent;
+    width: 12px;
+    height: 19px;
+    padding-left: 1px;
+    border-left: 1px solid #EDEFF5;
+}
+
+QTimeEdit::up-arrow:hover {
+    border-bottom-color: #F5A623;
+}
+
+QTimeEdit::down-arrow:hover {
+    border-top-color: #F5A623;
+}
+
+/* ---------------- Radio button ---------------- */
+
+QRadioButton {
+    color: #EDEFF5;
+    font-size: 13px;
+    spacing: 10px;
+    background: transparent;
+}
+
+QRadioButton::indicator {
+    width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    border: 2px solid #3B4157;
+    background-color: #262A3A;
+}
+
+QRadioButton::indicator:hover {
+    border: 2px solid #F5A623;
+}
+
+QRadioButton::indicator:checked {
+    border: 2px solid #F5A623;
+    background-color: #F5A623;
+}
+
+/* ---------------- Buttons ---------------- */
+
+QPushButton {
+    border: none;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 16px;
+}
+
+QPushButton#Create_pushButton {
+    background-color: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #F5A623, stop: 1 #F7B84B
+    );
+    color: #14161F;
+    font-size: 14px;
+}
+
+QPushButton#Create_pushButton:hover {
+    background-color: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #FFB238, stop: 1 #FFC15E
+    );
+}
+
+QPushButton#Create_pushButton:pressed {
+    background-color: #D98A12;
+}
+
+QPushButton#Delete_pushButton {
+    background-color: transparent;
+    color: #E5484D;
+    border: 2px solid #3B2226;
+}
+
+QPushButton#Delete_pushButton:hover {
+    background-color: rgba(229, 72, 77, 0.12);
+    border: 2px solid #E5484D;
+}
+
+QPushButton#Delete_pushButton:pressed {
+    background-color: rgba(229, 72, 77, 0.22);
+}
+
+/* ---------------- Table view (alarm list) ---------------- */
+
+QTableView {
+    background-color: #1C1F2B;
+    alternate-background-color: #20232F;
+    color: #EDEFF5;
+    border: none;
+    border-radius: 8px;
+    gridline-color: transparent;
+    selection-background-color: rgba(245, 166, 35, 0.18);
+    selection-color: #F5A623;
+    font-size: 13px;
+}
+
+QTableView::item {
+    padding: 8px 6px;
+    border: none;
+}
+
+QTableView::item:selected {
+    background-color: rgba(245, 166, 35, 0.18);
+    color: #F5A623;
+}
+
+QHeaderView::section {
+    background-color: #1C1F2B;
+    color: #8A90A3;
+    padding: 8px 6px;
+    border: none;
+    border-bottom: 1px solid #2E3345;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QTableCornerButton::section {
+    background-color: #1C1F2B;
+    border: none;
+}
+
+/* ---------------- Dropdowns (Settings) ---------------- */
+
+QComboBox {
+    background-color: #262A3A;
+    color: #EDEFF5;
+    border: 1px solid #2E3345;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+QComboBox:hover {
+    border: 1px solid #3B4157;
+}
+
+QComboBox:focus {
+    border: 1px solid #F5A623;
+    background-color: #20232F;
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 28px;
+    border-left: none;
+    background: transparent;
+}
+
+QComboBox::down-arrow {
+    image: url("Desktop-Notifier/UI/images/down_arrow_white.svg");
+    background: transparent;
+    width: 15px;
+    height: auto;
+    padding-right:4px
+}
+
+QComboBox::down-arrow:hover {
+    border-top-color: #F5A623;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #1C1F2B;
+    color: #EDEFF5;
+    border: 1px solid #2E3345;
+    border-radius: 8px;
+    selection-background-color: rgba(245, 166, 35, 0.18);
+    selection-color: #F5A623;
+}
+
+/* ---------------- Scrollbars ---------------- */
+
+QScrollBar:vertical {
+    background: transparent;
+    width: 10px;
+    margin: 4px 2px;
+}
+
+QScrollBar::handle:vertical {
+    background: #3B4157;
+    border-radius: 5px;
+    min-height: 24px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #4A5170;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QScrollBar:horizontal {
+    background: transparent;
+    height: 10px;
+    margin: 2px 4px;
+}
+
+QScrollBar::handle:horizontal {
+    background: #3B4157;
+    border-radius: 5px;
+    min-width: 24px;
+}
+
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
