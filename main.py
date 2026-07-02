@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QSystemTrayIcon,
     QMenu,
     QMessageBox,
+    QAbstractItemView,
 )
 from PyQt6.QtGui import QStandardItemModel, QStandardItem, QIcon
 from PyQt6.QtCore import QTime
@@ -49,7 +50,7 @@ class MainWindow(QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
-        style_file_path = os.path.join(BASE_DIR, "style.qss")
+        style_file_path = os.path.join(BASE_DIR, "UI/style/style.qss")
         if os.path.exists(style_file_path):
             try:
                 with open(style_file_path, "r", encoding="utf-8") as f:
@@ -73,6 +74,21 @@ class MainWindow(QMainWindow):
         self.table_model.setHorizontalHeaderLabels(["Time", "Alarm Name"])
         self.ui.Alert_tableView.setModel(self.table_model)
 
+        self.ui.Alert_tableView.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self.ui.Alert_tableView.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
+        self.ui.Alert_tableView.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
+        self.ui.Alert_tableView.alternatingRowColors()
+
+        # Ensure headers stretch nicely
+        self.ui.Alert_tableView.horizontalHeader().setStretchLastSection(True)
+        self.ui.Alert_tableView.verticalHeader().setVisible(False)
+
         self.ui.Diary_radioButton.setChecked(True)
         self.ui.Weekdays_lineEdit.setDisabled(True)
 
@@ -80,6 +96,14 @@ class MainWindow(QMainWindow):
         self.ui.Create_pushButton.clicked.connect(self.add_alarm)
         self.ui.Delete_pushButton.clicked.connect(self.delete_alarm)
         self.ui.Diary_radioButton.toggled.connect(self.toggle_days_input)
+
+        # Tabs
+        self.ui.actionAlarms_Dashboard.triggered.connect(
+            lambda: self.ui.mainStackedWidget.setCurrentIndex(0)
+        )
+        self.ui.actionPreferences_Settings.triggered.connect(
+            lambda: self.ui.mainStackedWidget.setCurrentIndex(1)
+        )
 
         # --- SETUP SYSTEM TRAY ---
         self.init_system_tray()
