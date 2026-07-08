@@ -1,5 +1,9 @@
 [project]
 name = "DesktopNotifier"
-
-[tool.pyside6-project]
-files = ["UI/menu.ui", "main.py"]
+version = "0.1.0"
+description = "A Windows desktop alarm and notification app."
+requires-python = ">=3.10"
+dependencies = [
+    "PyQt6",
+    "plyer",
+]
