@@ -1,10 +1,10 @@
-# ⏰ Desktop Notifier
+# Desktop Notifier
 
 A sleek, native Windows desktop notification utility built with **Python**, **PyQt6**, and **Plyer**. The application uses a split-process architecture to separate the management interface from the time-tracking worker, ensuring lightweight background execution.
 
 ---
 
-## 🚀 Key Features
+## Key Features
 
 - **Dual-Process Architecture:** A PyQt6 GUI manages your custom alert schedule, while a completely hidden, zero-overhead background worker process (`worker.py`) handles clock synchronization.
 - **System Tray Integration:** Closing the GUI window minimizes the application directly to the Windows Hidden Icons drawer, keeping it alive out of sight.
@@ -14,7 +14,7 @@ A sleek, native Windows desktop notification utility built with **Python**, **Py
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```text
 Desktop-Notifier/
@@ -31,7 +31,7 @@ Desktop-Notifier/
     └── alarms.pkl         # Local persistent binary storage file for alerts
 ```
 
-## 🛠️ Installation & Setup
+## Installation & Setup
 
 ### 1. Prerequisites
 
@@ -59,16 +59,16 @@ To launch the complete application with the management window interface and hidd
 python main.py
 ```
 
-## 🔮 Future Updates & Roadmap
+## Future Updates & Roadmap
 
 Here are some of the features and improvements I imagined for the app and plan on adding/changing:
 
 - [ ] **Custom Alert Sounds:** Let users upload their own `.mp3` or `.wav` files for notifications.
 - [ ] **Snooze Option:** Add a quick 5, 10, or 15-minute snooze button directly on the alert popups.
-- [ ] **New day selector:** I don't really love how the say selector is working, so I plan on changing that.
-- [ ] **Deactivate alarm:** I forgot to implement the option to deactivate the alams and really need to add that.
+- [ ] **New day selector:** I don't really love how the day selector is working, so I plan on changing that.
+- [ ] **Deactivate alarm:** I forgot to implement the option to deactivate the alarms and really need to add that.
 - [ ] **Edit Alarm:** Config the option to edit the alarm, I also forgot to add that.
-- [ ] **Timer:** I catch myself using it more than I thought through out my day, so I want to implement that.
+- [ ] **Timer:** I catch myself using it more than I thought throughout my day, so I want to implement that.
 - [ ] **Pomodoro Timer:** Add a Pomodoro timer with a bunch of available configs to facilitate my studying.
 - [ ] **Timezone Alarm:** Add an option to create alarms based on different timezones, it helps to set international meetings for example.
 - [ ] **JSON for the alarms:** Option to import/export alarms through JSON files.
