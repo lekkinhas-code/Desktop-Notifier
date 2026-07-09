@@ -1,6 +1,8 @@
 import sys
 import os
 import subprocess
+import csv
+import io
 
 from PyQt6.QtWidgets import (
     QMainWindow,
@@ -282,6 +284,7 @@ class MainWindow(QMainWindow):
 
     def start_worker(self):
         if os.path.exists(WORKER_FILE):
+            self._terminate_stale_workers()
             self.worker_process = subprocess.Popen(
                 [sys.executable, WORKER_FILE, "--background"],
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
@@ -289,6 +292,50 @@ class MainWindow(QMainWindow):
             print(f"[GUI] Spawned worker process at: {WORKER_FILE}")
         else:
             print(f"[GUI ERROR] Could not find worker.py at target path: {WORKER_FILE}")
+
+    def _terminate_stale_workers(self):
+        if not IS_WINDOWS:
+            return
+
+        try:
+            result = subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-Command",
+                    "Get-CimInstance Win32_Process | "
+                    "Where-Object { $_.CommandLine -like '*worker.py*' -and $_.CommandLine -like '*--background*' } | "
+                    "Select-Object ProcessId,CommandLine | "
+                    "ConvertTo-Csv -NoTypeInformation",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except Exception as error:
+            print(f"[GUI] Could not scan for stale workers: {error}")
+            return
+
+        reader = csv.DictReader(io.StringIO(result.stdout))
+        for row in reader:
+            try:
+                pid = int(row["ProcessId"])
+            except (KeyError, TypeError, ValueError):
+                continue
+
+            if pid == os.getpid():
+                continue
+
+            try:
+                subprocess.run(
+                    ["taskkill", "/PID", str(pid), "/F"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                print(f"[GUI] Terminated stale worker PID {pid}.")
+            except Exception as error:
+                print(f"[GUI] Could not terminate stale worker PID {pid}: {error}")
 
     def _current_icon_path(self):
         if self.is_dark_mode():

@@ -1,7 +1,6 @@
 import os
 import sys
 import time
-import ctypes
 import winreg
 from datetime import datetime, timedelta
 from plyer import notification
@@ -21,16 +20,6 @@ APP_TITLE = "Desktop Notifier"
 if os.name != "nt":
     BLACK_ICON_FILE = BLACK_ICON_FALLBACK_FILE
     WHITE_ICON_FILE = WHITE_ICON_FALLBACK_FILE
-
-
-def fix_windows_app_id():
-    """Forces Windows to see this script as a unique App, changing 'Python' to our name."""
-    try:
-        myappid = "Desktop Notifier by Lekkinhas"  # Any unique string
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
-    except Exception as e:
-        print(f"[Worker] Error setting app ID: {e}")
-        pass
 
 
 def is_dark_mode():
@@ -63,7 +52,6 @@ def create_test_alarm_if_empty():
 
 
 def main_worker_loop():
-    fix_windows_app_id()
     print("[Worker] Background worker started. Monitoring alarms...")
 
     icon_to_use = WHITE_ICON_FILE if is_dark_mode() else BLACK_ICON_FILE
@@ -84,18 +72,20 @@ def main_worker_loop():
 
         # 2. Iterate through your custom Alarm objects
         for alarm in alarms:
-            if alarm.should_trigger():
+            if alarm.should_trigger(now=now):
                 print(f"[Worker] Triggering alarm: {alarm.title}")
 
+                notify_icon = str(icon_to_use) if os.path.exists(icon_to_use) else None
                 try:
                     # Fire the native desktop notification using plyer
                     notification.notify(
                         title=alarm.title,
                         message=f"It's {alarm.time_str}! Click to dismiss.",
                         app_name=APP_TITLE,
-                        app_icon=str(icon_to_use),
+                        app_icon=notify_icon,
                         timeout=10,  # Notification disappears after 10 seconds
                     )
+                    print("[Worker] Notification sent.")
                 except Exception as e:
                     print(f"[Worker] Error showing notification: {e}")
                     print("Retrying with default icon instead.")
@@ -106,8 +96,9 @@ def main_worker_loop():
                             message=f"It's {alarm.time_str}! Click to dismiss.",
                             app_name=APP_TITLE,
                             app_icon=None,
-                            timeout=10,  # Notification disappears after 10 seconds
+                            timeout=5,  # Notification disappears after 10 seconds
                         )
+                        print("[Worker] Notification sent without icon.")
                     except Exception as critical_error:
                         print(f"[Notification Failed Completely]: {critical_error}")
 
