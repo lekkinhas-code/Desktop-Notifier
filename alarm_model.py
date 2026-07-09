@@ -1,6 +1,18 @@
 import uuid
 from datetime import datetime
 
+
+DEFAULT_DAYS = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+]
+
+
 class Alarm:
     def __init__(self, time_str, title, days=None, is_active=True):
         """
@@ -17,26 +29,25 @@ class Alarm:
         self.title = title
         self.is_active = is_active
         self.last_triggered_date = None  # Prevents the alarm from spamming during that match minute
-        
-        # Constructor logic for days: 
-        # If no days are provided, assign it all 7 days (Runs Everyday)
-        if days is None:
-            self.days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-        else:
-            self.days = days
 
-    def should_trigger(self):
+        self.days = DEFAULT_DAYS if days is None else days
+
+    def should_trigger(self, now=None):
         """
         Checks if the alarm matches the current system time and day.
         """
 
-        now = datetime.now()
+        now = datetime.now() if now is None else now
         current_time = now.strftime("%H:%M")
         current_date = now.strftime("%Y-%m-%d")
         current_day = now.strftime("%A")  # Gets full day name (e.g., "Monday")
 
-        # Condition check:
-        if (self.is_active and self.time_str == current_time and current_day in self.days and self.last_triggered_date != current_date):
+        if (
+            self.is_active
+            and self.time_str == current_time
+            and current_day in self.days
+            and self.last_triggered_date != current_date
+        ):
             return True
-            
+
         return False
