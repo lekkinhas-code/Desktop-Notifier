@@ -1,5 +1,4 @@
 import os
-import pickle
 import sys
 import time
 import ctypes
@@ -8,15 +7,20 @@ from datetime import datetime, timedelta
 from plyer import notification
 import winsound
 from alarm_model import Alarm
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-PKL_FILE = os.path.join(BASE_DIR, "Desktop-Notifier/alarms.pkl")
-BLACK_ICON_PATH = os.path.join(BASE_DIR, "image/alarm_icon.ico")
-WHITE_ICON_PATH = os.path.join(BASE_DIR, "image/alarm_icon_white.ico")
-SOUND_PATH = os.path.join(BASE_DIR, "audio/alarm_sound.wav")
+from alarm_storage import clear_alarms, load_alarms, save_alarms
+from app_paths import (
+    BLACK_ICON_FILE,
+    BLACK_ICON_FALLBACK_FILE,
+    SOUND_FILE,
+    WHITE_ICON_FILE,
+    WHITE_ICON_FALLBACK_FILE,
+)
 
 APP_TITLE = "Desktop Notifier"
+
+if os.name != "nt":
+    BLACK_ICON_FILE = BLACK_ICON_FALLBACK_FILE
+    WHITE_ICON_FILE = WHITE_ICON_FALLBACK_FILE
 
 
 def fix_windows_app_id():
@@ -42,15 +46,14 @@ def is_dark_mode():
 
 def create_test_alarm_if_empty():
     """Creates a temporary test alarm 1 minute from now if no file exists."""
-    if not os.path.exists(PKL_FILE):
+    if not load_alarms():
         now_plus_one = datetime.now() + timedelta(minutes=1)
         test_time = now_plus_one.strftime("%H:%M")
 
         # Creating a test alarm using our object blueprint (Runs everyday by default)
         test_alarm = Alarm(time_str=test_time, title="Test Alarm worked!")
         try:
-            with open(PKL_FILE, "wb") as f:
-                pickle.dump([test_alarm], f)
+            save_alarms([test_alarm])
         except Exception as e:
             print(f"[Worker] Error creating test alarm: {e}")
             return
@@ -63,7 +66,7 @@ def main_worker_loop():
     fix_windows_app_id()
     print("[Worker] Background worker started. Monitoring alarms...")
 
-    icon_to_use = WHITE_ICON_PATH if is_dark_mode() else BLACK_ICON_PATH
+    icon_to_use = WHITE_ICON_FILE if is_dark_mode() else BLACK_ICON_FILE
     if not icon_to_use:
         print(f"[Icon Missing] Not found at: {icon_to_use}.")
 
@@ -71,22 +74,13 @@ def main_worker_loop():
     # create_test_alarm_if_empty()
 
     while True:
-        print(
-            f"[Worker] Checking alarms at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}..."
-        )
+        now = datetime.now()
+        print(f"[Worker] Checking alarms at {now.strftime('%Y-%m-%d %H:%M:%S')}...")
         # 1. Safely load the alarms from the pickle file
-        if os.path.exists(PKL_FILE):
-            try:
-                with open(PKL_FILE, "rb") as f:
-                    alarms = pickle.load(f)
-            except Exception as e:
-                print(f"[Worker] Error reading file: {e}")
-                alarms = []
-        else:
-            alarms = []
+        alarms = load_alarms()
 
         file_needs_update = False
-        current_date = datetime.now().strftime("%Y-%m-%d")
+        current_date = now.strftime("%Y-%m-%d")
 
         # 2. Iterate through your custom Alarm objects
         for alarm in alarms:
@@ -117,14 +111,14 @@ def main_worker_loop():
                     except Exception as critical_error:
                         print(f"[Notification Failed Completely]: {critical_error}")
 
-                if SOUND_PATH and os.path.exists(SOUND_PATH):
+                if SOUND_FILE and os.path.exists(SOUND_FILE):
                     # Plays the user's custom .wav file asynchronously (doesn't freeze the loop)
                     winsound.PlaySound(
-                        SOUND_PATH, winsound.SND_FILENAME | winsound.SND_ASYNC
+                        SOUND_FILE, winsound.SND_FILENAME | winsound.SND_ASYNC
                     )
                 else:
                     # Default system beep fallback if no file or missing file
-                    print(f"[Audio Error] File missing at: {SOUND_PATH}")
+                    print(f"[Audio Error] File missing at: {SOUND_FILE}")
                     winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
 
                 # Mark it as triggered for today so it doesn't loop-spam this exact minute
@@ -134,14 +128,11 @@ def main_worker_loop():
         # 3. If an alarm triggered, re-save the file to update its 'last_triggered_date'
         if file_needs_update:
             try:
-                with open(PKL_FILE, "wb") as f:
-                    pickle.dump(alarms, f)
+                save_alarms(alarms)
             except Exception as e:
                 print(f"[Worker] Error updating file state: {e}")
 
-        # 4. Calculate exactly how many seconds/microseconds until the next top-of-the-minute
         now = datetime.now()
-
         # 60 seconds minus current seconds and fractions of a second
         time_to_sleep = 60 - now.second - (now.microsecond / 1_000_000.0)
 
@@ -152,9 +143,8 @@ def main_worker_loop():
 
 def cleanAlarms():
     """Utility function to clear all alarms (for testing purposes)."""
-    if os.path.exists(PKL_FILE):
-        os.remove(PKL_FILE)
-        print("[Worker] All alarms cleared.")
+    clear_alarms()
+    print("[Worker] All alarms cleared.")
 
 
 def menu():
