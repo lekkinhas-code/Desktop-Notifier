@@ -67,27 +67,39 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        self.alarms = []
+        self.worker_process = None
+        self._setup_ui()
+        self._apply_default_theme()
+        self._apply_window_icon()
+        self._setup_table()
+        self._setup_form_state()
+        self._connect_signals()
+        self._setup_navigation()
+        self.init_system_tray()
+        self.load_alarms()
+        self.start_worker()
+
+    def _setup_ui(self):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
+    def _apply_default_theme(self):
         load_stylesheet(QApplication.instance(), DARK_THEME_FILE)
 
+    def _apply_window_icon(self):
         icon_to_use = self._current_icon_path()
         if not icon_to_use:
             print(f"[Icon Missing] Not found at: {icon_to_use}.")
+            return
 
         if os.path.exists(icon_to_use):
             self.setWindowIcon(QIcon(icon_to_use))
 
-        self.ui.Alert_timeEdit.setTime(QTime.currentTime())
-        self.alarms = []
-        self.worker_process = None
-
-        # Table Model Setup
+    def _setup_table(self):
         self.table_model = QStandardItemModel(0, 2, self)
         self.table_model.setHorizontalHeaderLabels(["Time", "Alarm Name"])
         self.ui.Alert_tableView.setModel(self.table_model)
-
         self.ui.Alert_tableView.setEditTriggers(
             QAbstractItemView.EditTrigger.NoEditTriggers
         )
@@ -98,36 +110,28 @@ class MainWindow(QMainWindow):
             QAbstractItemView.SelectionBehavior.SelectRows
         )
         self.ui.Alert_tableView.setAlternatingRowColors(True)
-
-        # Ensure headers stretch nicely
         self.ui.Alert_tableView.horizontalHeader().setStretchLastSection(True)
         self.ui.Alert_tableView.verticalHeader().setVisible(False)
 
+    def _setup_form_state(self):
+        self.ui.Alert_timeEdit.setTime(QTime.currentTime())
         self.ui.Diary_radioButton.setChecked(True)
         self.ui.Weekdays_lineEdit.setDisabled(True)
+        self.ui.Theme_comboBox.setCurrentText("Dark Mode")
 
-        # Connections
+    def _connect_signals(self):
         self.ui.Create_pushButton.clicked.connect(self.add_alarm)
         self.ui.Delete_pushButton.clicked.connect(self.delete_alarm)
         self.ui.Diary_radioButton.toggled.connect(self.toggle_days_input)
-
-        # Theme Selector Connections & Startup State
-        self.ui.Theme_comboBox.setCurrentText("Dark Mode")
         self.ui.Theme_comboBox.currentTextChanged.connect(self.on_theme_changed)
 
-        # Tabs
+    def _setup_navigation(self):
         self.ui.actionAlarms_Dashboard.triggered.connect(
             lambda: self.ui.mainStackedWidget.setCurrentIndex(0)
         )
         self.ui.actionPreferences_Settings.triggered.connect(
             lambda: self.ui.mainStackedWidget.setCurrentIndex(1)
         )
-
-        # --- SETUP SYSTEM TRAY ---
-        self.init_system_tray()
-
-        self.load_alarms()
-        self.start_worker()
 
     def is_dark_mode(self):
         if not IS_WINDOWS:
@@ -146,6 +150,7 @@ class MainWindow(QMainWindow):
         """Slot function triggered when the user picks a new theme in the combobox."""
         app_instance = QApplication.instance()
         load_stylesheet(app_instance, self._stylesheet_for_theme(selected_text))
+        self._apply_window_icon()
 
     def init_system_tray(self):
         """Creates the hidden tray icon and its right-click menu."""
@@ -171,6 +176,9 @@ class MainWindow(QMainWindow):
 
         show_action = tray_menu.addAction("Open Notifier Menu")
         show_action.triggered.connect(self.showNormal)  # Brings window back
+        show_action.triggered.connect(
+            lambda: self.ui.Alert_timeEdit.setTime(QTime.currentTime())
+        )
 
         quit_action = tray_menu.addAction("Exit Completely")
         quit_action.triggered.connect(self.completely_quit)  # Closes app and worker
@@ -241,19 +249,8 @@ class MainWindow(QMainWindow):
     def add_alarm(self):
         self.alarms = load_alarms(self.alarms)
 
-        time_data = self.ui.Alert_timeEdit.time().toString("HH:mm")
-        title_data = self.ui.Name_lineEdit.text().strip() or "Alarm Alert!"
-        days_list = self._selected_days()
-
-        new_alarm = Alarm(time_str=time_data, title=title_data, days=days_list)
-        self.alarms.append(new_alarm)
-        self.save_alarms()
-        self.update_table_display()
-        self.ui.Name_lineEdit.clear()
-        self.ui.Weekdays_lineEdit.clear()
-        self.ui.Diary_radioButton.setChecked(True)
-        self.ui.Weekdays_lineEdit.setDisabled(True)
-        self.ui.Alert_timeEdit.setTime(QTime.currentTime())
+        self.alarms.append(self._build_alarm_from_form())
+        self._persist_alarm_changes(reset_form=True)
 
     def delete_alarm(self):
         selected_indexes = self.ui.Alert_tableView.selectionModel().selectedRows()
@@ -261,8 +258,7 @@ class MainWindow(QMainWindow):
             self.alarms = load_alarms(self.alarms)
 
             del self.alarms[selected_indexes[0].row()]
-            self.save_alarms()
-            self.update_table_display()
+            self._persist_alarm_changes()
 
     def start_worker(self):
         if os.path.exists(WORKER_FILE):
@@ -306,6 +302,26 @@ class MainWindow(QMainWindow):
             if raw_days.strip()
             else None
         )
+
+    def _build_alarm_from_form(self):
+        return Alarm(
+            time_str=self.ui.Alert_timeEdit.time().toString("HH:mm"),
+            title=self.ui.Name_lineEdit.text().strip() or "Alarm Alert!",
+            days=self._selected_days(),
+        )
+
+    def _reset_alarm_form(self):
+        self.ui.Name_lineEdit.clear()
+        self.ui.Weekdays_lineEdit.clear()
+        self.ui.Diary_radioButton.setChecked(True)
+        self.ui.Weekdays_lineEdit.setDisabled(True)
+        self.ui.Alert_timeEdit.setTime(QTime.currentTime())
+
+    def _persist_alarm_changes(self, reset_form=False):
+        self.save_alarms()
+        self.update_table_display()
+        if reset_form:
+            self._reset_alarm_form()
 
 
 def load_stylesheet(app, filename="darkTheme_styles.qss"):
