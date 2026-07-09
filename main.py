@@ -1,62 +1,78 @@
 import sys
 import os
-import pickle
 import subprocess
-import winreg
-import ctypes
+
 from PyQt6.QtWidgets import (
     QMainWindow,
     QApplication,
     QSystemTrayIcon,
     QMenu,
-    QMessageBox,
     QAbstractItemView,
 )
 from PyQt6.QtGui import QStandardItemModel, QStandardItem, QIcon
 from PyQt6.QtCore import QTime, qInstallMessageHandler
 from gui import Ui_MainWindow
 from alarm_model import Alarm
+from alarm_storage import load_alarms, save_alarms
+from app_paths import (
+    BLACK_ICON_FILE,
+    BLACK_ICON_FALLBACK_FILE,
+    DARK_THEME_FILE,
+    LIGHT_THEME_FILE,
+    WHITE_ICON_FILE,
+    WHITE_ICON_FALLBACK_FILE,
+    WORKER_FILE,
+)
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+IS_WINDOWS = os.name == "nt"
+SINGLE_INSTANCE_MUTEX_NAME = "Global\\DesktopNotifier_SingleInstance_Mutex_Lock"
+_APP_MUTEX_HANDLE = None
 
-PKL_FILE = os.path.join(BASE_DIR, "Desktop-Notifier/alarms.pkl")
-BLACK_ICON_PATH = os.path.join(BASE_DIR, "image/alarm_icon.ico")
-WHITE_ICON_PATH = os.path.join(BASE_DIR, "image/alarm_icon_white.ico")
-DARK_THEME = os.path.join(BASE_DIR, "UI/style/darkTheme_styles.qss")
-LIGHT_THEME = os.path.join(BASE_DIR, "UI/style/lightTheme_styles.qss")
+if IS_WINDOWS:
+    import winreg
+    import ctypes
+else:
+    pass
+
+
+if not IS_WINDOWS:
+    BLACK_ICON_FILE = BLACK_ICON_FALLBACK_FILE
+    WHITE_ICON_FILE = WHITE_ICON_FALLBACK_FILE
+
+
+def acquire_single_instance_lock():
+    global _APP_MUTEX_HANDLE
+
+    if not IS_WINDOWS:
+        return True
+
+    _APP_MUTEX_HANDLE = ctypes.windll.kernel32.CreateMutexW(
+        None, False, SINGLE_INSTANCE_MUTEX_NAME
+    )
+    last_error = ctypes.windll.kernel32.GetLastError()
+
+    if last_error == 183:
+        ctypes.windll.user32.MessageBoxW(
+            None,
+            "Desktop Notifier is already running.\n\nCheck the system tray near the clock.",
+            "App Already Open",
+            0x30,
+        )
+        return False
+
+    return True
 
 
 class MainWindow(QMainWindow):
 
     def __init__(self):
-        self.mutex_name = "Global\\DesktopNotifier_SingleInstance_Mutex_Lock"
-        # CreateMutexW returns a handle to a new or existing mutex object
-        self.mutex = ctypes.windll.kernel32.CreateMutexW(None, False, self.mutex_name)
-        last_error = ctypes.windll.kernel32.GetLastError()
-
-        # ERROR_ALREADY_EXISTS = 183
-        if last_error == 183:
-            # Another instance is already running! Show a popup and exit immediately.
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Icon.Warning)
-            msg.setText("Desktop Notifier is already running!")
-            msg.setInformativeText(
-                "Check your hidden icons system tray next to the Windows clock."
-            )
-            msg.setWindowTitle("App Already Open")
-            msg.exec()
-
-            # Close this duplicate window safely
-            sys.exit(0)
-
         super().__init__()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
-        style_file_path = os.path.join(BASE_DIR, "UI/style/darkTheme_styles.qss")
-        load_stylesheet(QApplication.instance(), style_file_path)
+        load_stylesheet(QApplication.instance(), DARK_THEME_FILE)
 
-        icon_to_use = WHITE_ICON_PATH if self.is_dark_mode() else BLACK_ICON_PATH
+        icon_to_use = self._current_icon_path()
         if not icon_to_use:
             print(f"[Icon Missing] Not found at: {icon_to_use}.")
 
@@ -81,7 +97,7 @@ class MainWindow(QMainWindow):
         self.ui.Alert_tableView.setSelectionBehavior(
             QAbstractItemView.SelectionBehavior.SelectRows
         )
-        self.ui.Alert_tableView.alternatingRowColors()
+        self.ui.Alert_tableView.setAlternatingRowColors(True)
 
         # Ensure headers stretch nicely
         self.ui.Alert_tableView.horizontalHeader().setStretchLastSection(True)
@@ -114,6 +130,9 @@ class MainWindow(QMainWindow):
         self.start_worker()
 
     def is_dark_mode(self):
+        if not IS_WINDOWS:
+            return True
+
         try:
             with winreg.OpenKey(
                 winreg.HKEY_CURRENT_USER,
@@ -126,24 +145,13 @@ class MainWindow(QMainWindow):
     def on_theme_changed(self, selected_text):
         """Slot function triggered when the user picks a new theme in the combobox."""
         app_instance = QApplication.instance()
-        if selected_text == "Dark Mode":
-            style_file_path = os.path.join(BASE_DIR, DARK_THEME)
-            load_stylesheet(app_instance, style_file_path)
-        elif selected_text == "Light Mode":
-            style_file_path = os.path.join(BASE_DIR, LIGHT_THEME)
-            load_stylesheet(app_instance, style_file_path)
-        elif selected_text == "System Default":
-            if self.is_dark_mode():
-                style_file_path = os.path.join(BASE_DIR, DARK_THEME)
-            else:
-                style_file_path = os.path.join(BASE_DIR, LIGHT_THEME)
-            load_stylesheet(app_instance, style_file_path)
+        load_stylesheet(app_instance, self._stylesheet_for_theme(selected_text))
 
     def init_system_tray(self):
         """Creates the hidden tray icon and its right-click menu."""
         self.tray_icon = QSystemTrayIcon(self)
 
-        icon_to_use = WHITE_ICON_PATH if self.is_dark_mode() else BLACK_ICON_PATH
+        icon_to_use = self._current_icon_path()
         if not icon_to_use:
             print(f"[Icon Missing] Not found at: {icon_to_use}.")
 
@@ -214,20 +222,14 @@ class MainWindow(QMainWindow):
             self.ui.Weekdays_lineEdit.clear()
 
     def load_alarms(self):
-        if os.path.exists(PKL_FILE):
-            try:
-                with open(PKL_FILE, "rb") as f:
-                    self.alarms = pickle.load(f)
-            except:
-                self.alarms = []
+        self.alarms = load_alarms()
         self.update_table_display()
 
     def save_alarms(self):
         try:
-            with open(PKL_FILE, "wb") as f:
-                pickle.dump(self.alarms, f)
-        except Exception as e:
-            print(f"Storage error: {e}")
+            save_alarms(self.alarms)
+        except Exception as error:
+            print(f"Storage error: {error}")
 
     def update_table_display(self):
         self.table_model.setRowCount(0)
@@ -237,25 +239,11 @@ class MainWindow(QMainWindow):
             )
 
     def add_alarm(self):
-
-        if os.path.exists(PKL_FILE):
-            try:
-                with open(PKL_FILE, "rb") as f:
-                    self.alarms = pickle.load(f)
-            except Exception as e:
-                print(f"Could not sync file before writing: {e}")
+        self.alarms = load_alarms(self.alarms)
 
         time_data = self.ui.Alert_timeEdit.time().toString("HH:mm")
         title_data = self.ui.Name_lineEdit.text().strip() or "Alarm Alert!"
-        if self.ui.Diary_radioButton.isChecked():
-            days_list = None
-        else:
-            raw_days = self.ui.Weekdays_lineEdit.text()
-            days_list = (
-                [d.strip().capitalize() for d in raw_days.split(",") if d.strip()]
-                if raw_days.strip()
-                else None
-            )
+        days_list = self._selected_days()
 
         new_alarm = Alarm(time_str=time_data, title=title_data, days=days_list)
         self.alarms.append(new_alarm)
@@ -270,28 +258,54 @@ class MainWindow(QMainWindow):
     def delete_alarm(self):
         selected_indexes = self.ui.Alert_tableView.selectionModel().selectedRows()
         if selected_indexes:
-
-            if os.path.exists(PKL_FILE):
-                try:
-                    with open(PKL_FILE, "rb") as f:
-                        self.alarms = pickle.load(f)
-                except:
-                    pass
+            self.alarms = load_alarms(self.alarms)
 
             del self.alarms[selected_indexes[0].row()]
             self.save_alarms()
             self.update_table_display()
 
     def start_worker(self):
-        worker_path = os.path.join(BASE_DIR, "worker.py")
-        if os.path.exists(worker_path):
+        if os.path.exists(WORKER_FILE):
             self.worker_process = subprocess.Popen(
-                [sys.executable, worker_path, "--background"],
+                [sys.executable, WORKER_FILE, "--background"],
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
             )
-            print(f"[GUI] Spawned worker process at: {worker_path}")
+            print(f"[GUI] Spawned worker process at: {WORKER_FILE}")
         else:
-            print(f"[GUI ERROR] Could not find worker.py at target path: {worker_path}")
+            print(f"[GUI ERROR] Could not find worker.py at target path: {WORKER_FILE}")
+
+    def _current_icon_path(self):
+        if self.is_dark_mode():
+            return (
+                WHITE_ICON_FILE
+                if os.path.exists(WHITE_ICON_FILE)
+                else WHITE_ICON_FALLBACK_FILE
+            )
+        return (
+            BLACK_ICON_FILE
+            if os.path.exists(BLACK_ICON_FILE)
+            else BLACK_ICON_FALLBACK_FILE
+        )
+
+    def _stylesheet_for_theme(self, selected_text):
+        if selected_text == "Dark Mode":
+            return DARK_THEME_FILE
+        if selected_text == "Light Mode":
+            return LIGHT_THEME_FILE
+        if selected_text == "System Default":
+            return DARK_THEME_FILE if self.is_dark_mode() else LIGHT_THEME_FILE
+        return DARK_THEME_FILE
+
+    def _selected_days(self):
+        if self.ui.Diary_radioButton.isChecked():
+            return None
+
+        raw_days = self.ui.Weekdays_lineEdit.text()
+        return (
+            [day.strip().capitalize() for day in raw_days.split(",") if day.strip()]
+            if raw_days.strip()
+            else None
+        )
 
 
 def load_stylesheet(app, filename="darkTheme_styles.qss"):
@@ -323,6 +337,8 @@ def qt_message_filter(msg_type, context, message):
 
 if __name__ == "__main__":
     qInstallMessageHandler(qt_message_filter)  # Install the custom message filter
+    if not acquire_single_instance_lock():
+        sys.exit(0)
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
