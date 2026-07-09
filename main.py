@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
     QAbstractItemView,
 )
 from PyQt6.QtGui import QStandardItemModel, QStandardItem, QIcon
-from PyQt6.QtCore import QTime, qInstallMessageHandler
+from PyQt6.QtCore import QTime, qInstallMessageHandler, Qt
 from gui import Ui_MainWindow
 from alarm_model import Alarm
 from alarm_storage import load_alarms, save_alarms
@@ -97,8 +97,8 @@ class MainWindow(QMainWindow):
             self.setWindowIcon(QIcon(icon_to_use))
 
     def _setup_table(self):
-        self.table_model = QStandardItemModel(0, 2, self)
-        self.table_model.setHorizontalHeaderLabels(["Time", "Alarm Name"])
+        self.table_model = QStandardItemModel(0, 3, self)
+        self.table_model.setHorizontalHeaderLabels(["Time", "Alarm Name", "Status"])
         self.ui.Alert_tableView.setModel(self.table_model)
         self.ui.Alert_tableView.setEditTriggers(
             QAbstractItemView.EditTrigger.NoEditTriggers
@@ -124,6 +124,7 @@ class MainWindow(QMainWindow):
         self.ui.Delete_pushButton.clicked.connect(self.delete_alarm)
         self.ui.Diary_radioButton.toggled.connect(self.toggle_days_input)
         self.ui.Theme_comboBox.currentTextChanged.connect(self.on_theme_changed)
+        self.table_model.itemChanged.connect(self.toggle_alarm_state)
 
     def _setup_navigation(self):
         self.ui.actionAlarms_Dashboard.triggered.connect(
@@ -229,6 +230,18 @@ class MainWindow(QMainWindow):
         if checked:
             self.ui.Weekdays_lineEdit.clear()
 
+    def toggle_alarm_state(self, item):
+        if item.column() != 2:
+            return
+
+        row = item.row()
+
+        if 0 <= row < len(self.alarms):
+            is_checked = item.checkState() == Qt.CheckState.Checked
+            self.alarms[row].is_active = is_checked
+
+            self.save_alarms()
+
     def load_alarms(self):
         self.alarms = load_alarms()
         self.update_table_display()
@@ -242,8 +255,15 @@ class MainWindow(QMainWindow):
     def update_table_display(self):
         self.table_model.setRowCount(0)
         for alarm in self.alarms:
+            status_item = QStandardItem("")
+            status_item.setCheckable(True)
+            if getattr(alarm, "is_active", True):
+                status_item.setCheckState(Qt.CheckState.Checked)
+            else:
+                status_item.setCheckState(Qt.CheckState.Unchecked)
+
             self.table_model.appendRow(
-                [QStandardItem(alarm.time_str), QStandardItem(alarm.title)]
+                [QStandardItem(alarm.time_str), QStandardItem(alarm.title), status_item]
             )
 
     def add_alarm(self):
