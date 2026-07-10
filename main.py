@@ -12,11 +12,12 @@ from PyQt6.QtWidgets import (
     QAbstractItemView,
     QStyledItemDelegate,
     QStyle,
+    QPushButton,
 )
-from PyQt6.QtGui import QStandardItemModel, QStandardItem, QIcon
+from PyQt6.QtGui import QStandardItemModel, QStandardItem, QIcon, QCursor
 from PyQt6.QtCore import QTime, qInstallMessageHandler, Qt, QRect, QEvent
 from gui import Ui_MainWindow
-from alarm_model import Alarm
+from alarm_model import Alarm, DEFAULT_DAYS
 from alarm_storage import load_alarms, save_alarms
 from app_paths import (
     BLACK_ICON_FILE,
@@ -28,6 +29,8 @@ from app_paths import (
     WHITE_ICON_FILE,
     WHITE_ICON_FALLBACK_FILE,
     WORKER_FILE,
+    EDIT_BLACK_BUTTON_ICON_FILE,
+    EDIT_WHITE_BUTTON_ICON_FILE,
 )
 
 IS_WINDOWS = os.name == "nt"
@@ -144,7 +147,9 @@ class MainWindow(QMainWindow):
         self.table_model = QStandardItemModel(0, 3, self)
         self.table_model.setHorizontalHeaderLabels(["Time", "Alarm Name", "Status"])
         self.ui.Alert_tableView.setModel(self.table_model)
-        self.ui.Alert_tableView.setItemDelegateForColumn(2, StatusIconDelegate(self.ui.Alert_tableView))
+        self.ui.Alert_tableView.setItemDelegateForColumn(
+            2, StatusIconDelegate(self.ui.Alert_tableView)
+        )
         self.ui.Alert_tableView.setEditTriggers(
             QAbstractItemView.EditTrigger.NoEditTriggers
         )
@@ -159,14 +164,27 @@ class MainWindow(QMainWindow):
         self.ui.Alert_tableView.verticalHeader().setVisible(False)
 
     def _setup_form_state(self):
+        self.editing_alarm_id = None
+
         self.ui.Alert_timeEdit.setTime(QTime.currentTime())
         self.ui.Diary_radioButton.setChecked(True)
         self.ui.Weekdays_lineEdit.setDisabled(True)
         self.ui.Theme_comboBox.setCurrentText("Dark Mode")
 
+        self.Edit_pushButton = QPushButton("Edit Alarm")
+        self.Edit_pushButton.setObjectName("Edit_pushButton")
+        self._update_edit_button_icon("System Default")
+        self.Edit_pushButton.setMinimumSize(0, 44)
+        self.Edit_pushButton.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.ui.sidebarLayout.insertWidget(
+            self.ui.sidebarLayout.indexOf(self.ui.Delete_pushButton),
+            self.Edit_pushButton,
+        )
+
     def _connect_signals(self):
-        self.ui.Create_pushButton.clicked.connect(self.add_alarm)
+        self.ui.Create_pushButton.clicked.connect(self.handle_save_clicked)
         self.ui.Delete_pushButton.clicked.connect(self.delete_alarm)
+        self.Edit_pushButton.clicked.connect(self.handle_edit_alarm)
         self.ui.Diary_radioButton.toggled.connect(self.toggle_days_input)
         self.ui.Theme_comboBox.currentTextChanged.connect(self.on_theme_changed)
         self.table_model.itemChanged.connect(self.toggle_alarm_state)
@@ -196,8 +214,24 @@ class MainWindow(QMainWindow):
         """Slot function triggered when the user picks a new theme in the combobox."""
         app_instance = QApplication.instance()
         load_stylesheet(app_instance, self._stylesheet_for_theme(selected_text))
-        load_stylesheet(app_instance, STATUS_COLUMN_STYLE_FILE)
         self._apply_window_icon()
+        self._update_edit_button_icon(selected_text)
+
+    def _update_edit_button_icon(self, theme):
+        """Updates the Edit button icon dynamically based on the current theme."""
+        if theme == "Dark Mode":
+            icon_path = EDIT_WHITE_BUTTON_ICON_FILE
+        if theme == "Light Mode":
+            icon_path = EDIT_BLACK_BUTTON_ICON_FILE
+        if theme == "System Default":
+            icon_path = (
+                EDIT_WHITE_BUTTON_ICON_FILE
+                if self.is_dark_mode()
+                else EDIT_BLACK_BUTTON_ICON_FILE
+            )
+
+        if icon_path and os.path.exists(icon_path):
+            self.Edit_pushButton.setIcon(QIcon(icon_path))
 
     def init_system_tray(self):
         """Creates the hidden tray icon and its right-click menu."""
@@ -328,6 +362,70 @@ class MainWindow(QMainWindow):
             del self.alarms[selected_indexes[0].row()]
             self._persist_alarm_changes()
 
+    def update_alarm(self):
+        self.alarms = load_alarms(self.alarms)
+        for alarm in self.alarms:
+            if getattr(alarm, "id", None) == self.editing_alarm_id:
+                alarm.time_str = self.ui.Alert_timeEdit.time().toString("HH:mm")
+                alarm.title = self.ui.Name_lineEdit.text().strip() or "Alarm Alert!"
+                alarm.days = (
+                    DEFAULT_DAYS
+                    if self._selected_days() is None
+                    else self._selected_days()
+                )
+                alarm.last_triggered_date = None
+                break
+
+        self._persist_alarm_changes(reset_form=True)
+        self.editing_alarm_id = None
+
+    def handle_save_clicked(self):
+        """Connected to your Create/Save push button."""
+        if self.editing_alarm_id is not None:
+            # STATE A: We are in 'Edit Mode' -> Update existing
+            self.update_alarm()
+        else:
+            # STATE B: We are in 'Create Mode' -> Add a new one
+            self.add_alarm()
+
+    def handle_edit_alarm(self):
+
+        if self.editing_alarm_id is not None:
+            self._reset_alarm_form()
+            return
+
+        selected_indexes = self.ui.Alert_tableView.selectionModel().selectedRows()
+        if not selected_indexes:
+            return
+
+        self.alarms = load_alarms(self.alarms)
+        row = selected_indexes[0].row()
+        if row < 0 or row >= len(self.alarms):
+            return
+
+        alarm = self.alarms[row]
+        self._populate_form_from_alarm(alarm)
+        self.editing_alarm_id = alarm.id
+
+        self.ui.Title_label.setText("Edit Alarm")
+        self.ui.Create_pushButton.setText("Update Alarm")
+        self.Edit_pushButton.setText("Cancel Edit")
+
+    def _populate_form_from_alarm(self, alarm):
+        self.ui.Name_lineEdit.setText(alarm.title)
+        self.ui.Alert_timeEdit.setTime(QTime.fromString(alarm.time_str, "HH:mm"))
+
+        is_everyday = set(alarm.days) == set(DEFAULT_DAYS)
+        if is_everyday:
+            self.ui.Diary_radioButton.setChecked(True)
+            self.ui.Weekdays_lineEdit.clear()
+            self.ui.Weekdays_lineEdit.setDisabled(True)
+        else:
+            self.ui.Diary_radioButton.setChecked(False)
+            days_str = ", ".join(alarm.days)
+            self.ui.Weekdays_lineEdit.setText(days_str)
+            self.ui.Weekdays_lineEdit.setDisabled(False)
+
     def start_worker(self):
         if os.path.exists(WORKER_FILE):
             self._terminate_stale_workers()
@@ -429,6 +527,10 @@ class MainWindow(QMainWindow):
         self.ui.Diary_radioButton.setChecked(True)
         self.ui.Weekdays_lineEdit.setDisabled(True)
         self.ui.Alert_timeEdit.setTime(QTime.currentTime())
+        self.ui.Title_label.setText("New Alarm")
+        self.ui.Create_pushButton.setText("Create New Alarm")
+        self.Edit_pushButton.setText("Edit Alarm")
+        self.editing_alarm_id = None
 
     def _persist_alarm_changes(self, reset_form=False):
         self.save_alarms()
