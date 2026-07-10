@@ -66,8 +66,8 @@ Here are some of the features and improvements I imagined for the app and plan o
 - [ ] **Custom Alert Sounds:** Let users upload their own `.mp3` or `.wav` files for notifications.
 - [ ] **Snooze Option:** Add a quick 5, 10, or 15-minute snooze button directly on the alert popups.
 - [ ] **New day selector:** I don't really love how the day selector is working, so I plan on changing that.
-- [ ] **Deactivate alarm:** I forgot to implement the option to deactivate the alarms and really need to add that.
-- [ ] **Edit Alarm:** Config the option to edit the alarm, I also forgot to add that.
+- [x] ~~**Deactivate alarm:** I forgot to implement the option to deactivate the alarms and really need to add that.~~
+- [x] ~~**Edit Alarm:** Config the option to edit the alarm, I also forgot to add that.~~
 - [ ] **Timer:** I catch myself using it more than I thought throughout my day, so I want to implement that.
 - [ ] **Pomodoro Timer:** Add a Pomodoro timer with a bunch of available configs to facilitate my studying.
 - [ ] **Timezone Alarm:** Add an option to create alarms based on different timezones, it helps to set international meetings for example.
