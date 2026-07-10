@@ -343,3 +343,11 @@ QScrollBar::handle:horizontal {
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
     width: 0px;
 }
+
+QTableView {
+    icon-size: 35px 19px;
+}
+
+QTableView::item {
+    padding: 6px 8px;
+}
