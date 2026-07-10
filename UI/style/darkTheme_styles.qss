@@ -225,6 +225,23 @@ QPushButton#Delete_pushButton:pressed {
     background-color: rgba(229, 72, 77, 0.22);
 }
 
+QPushButton#Edit_pushButton {
+    background-color: transparent;
+    color: #D98A12;
+    border: 2px solid #553300;
+}
+
+QPushButton#Edit_pushButton:hover {
+    background-color: rgba(229, 72, 77, 0.12);
+    border: 2px solid #D98A12;
+}
+
+QPushButton#Edit_pushButton:pressed {
+    background-color: rgba(229, 72, 77, 0.22);
+}
+
+
+
 /* ---------------- Table view (alarm list) ---------------- */
 
 QTableView {
@@ -350,6 +367,8 @@ QScrollBar::handle:horizontal {
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
     width: 0px;
 }
+
+/* ----------- Table View : for status toggle ----------- */
 
 QTableView {
     icon-size: 35px 19px;
