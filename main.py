@@ -10,9 +10,11 @@ from PyQt6.QtWidgets import (
     QSystemTrayIcon,
     QMenu,
     QAbstractItemView,
+    QStyledItemDelegate,
+    QStyle,
 )
 from PyQt6.QtGui import QStandardItemModel, QStandardItem, QIcon
-from PyQt6.QtCore import QTime, qInstallMessageHandler, Qt
+from PyQt6.QtCore import QTime, qInstallMessageHandler, Qt, QRect, QEvent
 from gui import Ui_MainWindow
 from alarm_model import Alarm
 from alarm_storage import load_alarms, save_alarms
@@ -21,6 +23,8 @@ from app_paths import (
     BLACK_ICON_FALLBACK_FILE,
     DARK_THEME_FILE,
     LIGHT_THEME_FILE,
+    STATUS_OFF_ICON_FILE,
+    STATUS_ON_ICON_FILE,
     WHITE_ICON_FILE,
     WHITE_ICON_FALLBACK_FILE,
     WORKER_FILE,
@@ -65,6 +69,43 @@ def acquire_single_instance_lock():
     return True
 
 
+class StatusIconDelegate(QStyledItemDelegate):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.on_icon = QIcon(STATUS_ON_ICON_FILE)
+        self.off_icon = QIcon(STATUS_OFF_ICON_FILE)
+
+    def paint(self, painter, option, index):
+        active = bool(index.data(Qt.ItemDataRole.UserRole))
+        icon = self.on_icon if active else self.off_icon
+
+        painter.save()
+        painter.fillRect(option.rect, option.palette.base())
+        if option.state & QStyle.StateFlag.State_Selected:
+            painter.fillRect(option.rect, option.palette.highlight())
+
+        icon_rect = QRect(option.rect)
+        icon_rect.setWidth(35)
+        icon_rect.setHeight(19)
+        icon_rect.moveCenter(option.rect.center())
+        icon.paint(painter, icon_rect)
+        painter.restore()
+
+    def editorEvent(self, event, model, option, index):
+        if event.type() == QEvent.Type.MouseButtonRelease and index.column() == 2:
+            current = bool(index.data(Qt.ItemDataRole.UserRole))
+            new_state = not current
+            model.setData(index, new_state, Qt.ItemDataRole.UserRole)
+            model.setData(
+                index,
+                STATUS_ON_ICON_FILE if new_state else STATUS_OFF_ICON_FILE,
+                Qt.ItemDataRole.DecorationRole,
+            )
+            model.setData(index, "", Qt.ItemDataRole.DisplayRole)
+            return True
+        return super().editorEvent(event, model, option, index)
+
+
 class MainWindow(QMainWindow):
 
     def __init__(self):
@@ -88,6 +129,7 @@ class MainWindow(QMainWindow):
 
     def _apply_default_theme(self):
         load_stylesheet(QApplication.instance(), DARK_THEME_FILE)
+        # load_stylesheet(QApplication.instance(), STATUS_COLUMN_STYLE_FILE)
 
     def _apply_window_icon(self):
         icon_to_use = self._current_icon_path()
@@ -102,6 +144,7 @@ class MainWindow(QMainWindow):
         self.table_model = QStandardItemModel(0, 3, self)
         self.table_model.setHorizontalHeaderLabels(["Time", "Alarm Name", "Status"])
         self.ui.Alert_tableView.setModel(self.table_model)
+        self.ui.Alert_tableView.setItemDelegateForColumn(2, StatusIconDelegate(self.ui.Alert_tableView))
         self.ui.Alert_tableView.setEditTriggers(
             QAbstractItemView.EditTrigger.NoEditTriggers
         )
@@ -153,6 +196,7 @@ class MainWindow(QMainWindow):
         """Slot function triggered when the user picks a new theme in the combobox."""
         app_instance = QApplication.instance()
         load_stylesheet(app_instance, self._stylesheet_for_theme(selected_text))
+        load_stylesheet(app_instance, STATUS_COLUMN_STYLE_FILE)
         self._apply_window_icon()
 
     def init_system_tray(self):
@@ -239,7 +283,7 @@ class MainWindow(QMainWindow):
         row = item.row()
 
         if 0 <= row < len(self.alarms):
-            is_checked = item.checkState() == Qt.CheckState.Checked
+            is_checked = bool(item.data(Qt.ItemDataRole.UserRole))
             self.alarms[row].is_active = is_checked
 
             self.save_alarms()
@@ -258,11 +302,13 @@ class MainWindow(QMainWindow):
         self.table_model.setRowCount(0)
         for alarm in self.alarms:
             status_item = QStandardItem("")
-            status_item.setCheckable(True)
-            if getattr(alarm, "is_active", True):
-                status_item.setCheckState(Qt.CheckState.Checked)
-            else:
-                status_item.setCheckState(Qt.CheckState.Unchecked)
+            status_item.setEditable(False)
+            is_active = getattr(alarm, "is_active", True)
+            status_item.setData(is_active, Qt.ItemDataRole.UserRole)
+            status_item.setData(
+                STATUS_ON_ICON_FILE if is_active else STATUS_OFF_ICON_FILE,
+                Qt.ItemDataRole.DecorationRole,
+            )
 
             self.table_model.appendRow(
                 [QStandardItem(alarm.time_str), QStandardItem(alarm.title), status_item]
