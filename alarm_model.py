@@ -1,7 +1,6 @@
 import uuid
 from datetime import datetime
 
-
 DEFAULT_DAYS = [
     "Monday",
     "Tuesday",
@@ -17,7 +16,7 @@ class Alarm:
     def __init__(self, time_str, title, days=None, is_active=True):
         """
         Blueprint for a single alarm object.
-        
+
         :param time_str: String format "HH:MM" (e.g., "08:00")
         :param title: String title/message for the notification
         :param days: List of strings for specific days (e.g., ["Monday", "Wednesday"])
@@ -28,7 +27,9 @@ class Alarm:
         self.time_str = time_str
         self.title = title
         self.is_active = is_active
-        self.last_triggered_date = None  # Prevents the alarm from spamming during that match minute
+        self.last_triggered_date = (
+            None  # Prevents the alarm from spamming during that match minute
+        )
 
         self.days = DEFAULT_DAYS if days is None else days
 
