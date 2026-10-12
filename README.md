@@ -72,3 +72,10 @@ Here are some of the features and improvements I imagined for the app and plan o
 - [ ] **Pomodoro Timer:** Add a Pomodoro timer with a bunch of available configs to facilitate my studying.
 - [ ] **Timezone Alarm:** Add an option to create alarms based on different timezones, it helps to set international meetings for example.
 - [ ] **JSON for the alarms:** Option to import/export alarms through JSON files.
+- [ ] **Modern Windows Toasts:** Replace the legacy balloon tips with native Windows toast notifications that support action buttons (needed for Snooze/Dismiss), stay on screen until dismissed and show up in the Action Center.
+- [ ] **Missed Alarm Catch-up:** Fire alarms that were missed while the PC was asleep or shut down, with a "You missed X alarms" summary.
+- [ ] **One-time Alarms:** Create alarms for a specific date (e.g. "20 Oct at 15:00") that disable or delete themselves after firing.
+- [ ] **Next Alarm Display:** Show a countdown to the next alarm in the table, the tray tooltip and the status bar (e.g. "Next: Morning workout in 2h 14m").
+- [ ] **Sort, Search & Duplicate:** Sort and search the alarm list, and duplicate an existing alarm to quickly create a similar one.
+- [ ] **Ring Until Dismissed:** Option to keep the sound ringing (or repeat it N times) until the alarm is dismissed, plus a volume setting.
+- [ ] **Health Indicator:** Warn through the tray icon or status bar if the background worker stops or the alarm checks fall behind.
