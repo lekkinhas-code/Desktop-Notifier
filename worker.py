@@ -1,3 +1,12 @@
+"""Background worker that fires alarm notifications.
+
+main.py starts this script with --background as a hidden process. Once a
+minute it reloads the saved alarms and, for each one that is due, shows a
+desktop notification and plays the alarm sound.
+
+Run it directly (without --background) to get a small console menu for testing.
+"""
+
 import os
 import sys
 import time
@@ -16,12 +25,14 @@ from app_paths import (
 
 APP_TITLE = "Desktop Notifier"
 
+# .ico files only work on Windows, so use the .png versions elsewhere
 if os.name != "nt":
     BLACK_ICON_FILE = BLACK_ICON_FALLBACK_FILE
     WHITE_ICON_FILE = WHITE_ICON_FALLBACK_FILE
 
 
 def is_dark_mode():
+    """Returns True if Windows is using a dark taskbar (SystemUsesLightTheme == 0)."""
     try:
         with winreg.OpenKey(
             winreg.HKEY_CURRENT_USER,
@@ -33,8 +44,10 @@ def is_dark_mode():
 
 
 def main_worker_loop():
+    """Checks the alarms once a minute, forever, firing the ones that are due."""
     print("[Worker] Background worker started. Monitoring alarms...")
 
+    # Pick the icon that contrasts with the taskbar. It is chosen once, at startup.
     icon_to_use = WHITE_ICON_FILE if is_dark_mode() else BLACK_ICON_FILE
     if not os.path.exists(icon_to_use):
         print(f"[Icon Missing] Not found at: {icon_to_use}.")
@@ -44,6 +57,7 @@ def main_worker_loop():
         now = datetime.now()
         print(f"[Worker] Checking alarms at {now.strftime('%Y-%m-%d %H:%M:%S')}...")
         # 1. Safely load the alarms from the pickle file
+        #    (reloaded every minute so changes made in the GUI are picked up)
         alarms = load_alarms()
 
         file_needs_update = False
@@ -55,7 +69,8 @@ def main_worker_loop():
                 print(f"[Worker] Triggering alarm: {alarm.title}")
 
                 try:
-                    # Fire the native desktop notification using plyer
+                    # Fire the native desktop notification using plyer.
+                    # On Windows this call blocks until the timeout ends.
                     notification.notify(
                         title=alarm.title,
                         message=f"It's {alarm.time_str}!",
@@ -101,6 +116,7 @@ def main_worker_loop():
             except Exception as e:
                 print(f"[Worker] Error updating file state: {e}")
 
+        # 4. Sleep until the start of the next minute
         now = datetime.now()
         # 60 seconds minus current seconds and fractions of a second
         time_to_sleep = 60 - now.second - (now.microsecond / 1_000_000.0)
@@ -137,6 +153,7 @@ def menu():
 
 
 if __name__ == "__main__":
+    # main.py passes --background; running the file by hand opens the test menu
     if "--background" in sys.argv:
         print("Launched by GUI. Starting background worker loop...")
         main_worker_loop()

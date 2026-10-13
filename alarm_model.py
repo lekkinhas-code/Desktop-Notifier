@@ -1,6 +1,9 @@
+"""Alarm data model shared by the GUI (main.py) and the background worker (worker.py)."""
+
 import uuid
 from datetime import datetime
 
+# Full English day names, matching what strftime("%A") returns.
 DEFAULT_DAYS = [
     "Monday",
     "Tuesday",
@@ -13,14 +16,16 @@ DEFAULT_DAYS = [
 
 
 class Alarm:
+    """A single repeating alarm, stored on disk by alarm_storage."""
+
     def __init__(self, time_str, title, days=None, is_active=True):
         """
         Blueprint for a single alarm object.
 
-        :param time_str: String format "HH:MM" (e.g., "08:00")
+        :param time_str: 24-hour time string in "HH:MM" format (e.g., "08:00")
         :param title: String title/message for the notification
-        :param days: List of strings for specific days (e.g., ["Monday", "Wednesday"])
-            If left empty/None, it defaults to running EVERYDAY.
+        :param days: List of full day names (e.g., ["Monday", "Wednesday"]).
+            If None, the alarm runs EVERY DAY.
         :param is_active: Boolean indicating if the alarm is currently turned on
         """
         self.id = str(uuid.uuid4())  # Unique ID for internal tracking
@@ -36,6 +41,11 @@ class Alarm:
     def should_trigger(self, now=None):
         """
         Checks if the alarm matches the current system time and day.
+
+        Returns True only when the alarm is active, the time and weekday match
+        exactly, and it hasn't already fired today.
+
+        :param now: datetime to check against (defaults to the current time)
         """
 
         now = datetime.now() if now is None else now
