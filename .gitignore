@@ -85,3 +85,5 @@ CMakeLists.txt.user*
 
 *.env
 *.pkl
+# Local review notes
+REVIEW_REPORT.md
