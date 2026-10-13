@@ -2,10 +2,9 @@ import os
 import sys
 import time
 import winreg
-from datetime import datetime, timedelta
+from datetime import datetime
 from plyer import notification
 import winsound
-from alarm_model import Alarm
 from alarm_storage import clear_alarms, load_alarms, save_alarms
 from app_paths import (
     BLACK_ICON_FILE,
@@ -33,33 +32,13 @@ def is_dark_mode():
         return False
 
 
-def create_test_alarm_if_empty():
-    """Creates a temporary test alarm 1 minute from now if no file exists."""
-    if not load_alarms():
-        now_plus_one = datetime.now() + timedelta(minutes=1)
-        test_time = now_plus_one.strftime("%H:%M")
-
-        # Creating a test alarm using our object blueprint (Runs everyday by default)
-        test_alarm = Alarm(time_str=test_time, title="Test Alarm worked!")
-        try:
-            save_alarms([test_alarm])
-        except Exception as e:
-            print(f"[Worker] Error creating test alarm: {e}")
-            return
-
-        print(f"[Test] No alarms found. Created a test alarm for {test_time}!")
-        print("Keep this script running and watch your Windows notification center!")
-
-
 def main_worker_loop():
     print("[Worker] Background worker started. Monitoring alarms...")
 
     icon_to_use = WHITE_ICON_FILE if is_dark_mode() else BLACK_ICON_FILE
-    if not icon_to_use:
+    if not os.path.exists(icon_to_use):
         print(f"[Icon Missing] Not found at: {icon_to_use}.")
-
-    # Run the test check
-    # create_test_alarm_if_empty()
+        icon_to_use = None
 
     while True:
         now = datetime.now()
@@ -75,14 +54,13 @@ def main_worker_loop():
             if alarm.should_trigger(now=now):
                 print(f"[Worker] Triggering alarm: {alarm.title}")
 
-                notify_icon = str(icon_to_use) if os.path.exists(icon_to_use) else None
                 try:
                     # Fire the native desktop notification using plyer
                     notification.notify(
                         title=alarm.title,
-                        message=f"It's {alarm.time_str}! Click to dismiss.",
+                        message=f"It's {alarm.time_str}!",
                         app_name=APP_TITLE,
-                        app_icon=notify_icon,
+                        app_icon=icon_to_use,
                         timeout=10,  # Notification disappears after 10 seconds
                     )
                     print("[Worker] Notification sent.")
@@ -93,10 +71,10 @@ def main_worker_loop():
                     try:
                         notification.notify(
                             title=alarm.title,
-                            message=f"It's {alarm.time_str}! Click to dismiss.",
+                            message=f"It's {alarm.time_str}!",
                             app_name=APP_TITLE,
                             app_icon=None,
-                            timeout=5,  # Notification disappears after 10 seconds
+                            timeout=5,  # Notification disappears after 5 seconds
                         )
                         print("[Worker] Notification sent without icon.")
                     except Exception as critical_error:

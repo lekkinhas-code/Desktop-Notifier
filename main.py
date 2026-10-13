@@ -40,8 +40,6 @@ _APP_MUTEX_HANDLE = None
 if IS_WINDOWS:
     import winreg
     import ctypes
-else:
-    pass
 
 
 if not IS_WINDOWS:
@@ -132,16 +130,14 @@ class MainWindow(QMainWindow):
 
     def _apply_default_theme(self):
         load_stylesheet(QApplication.instance(), DARK_THEME_FILE)
-        # load_stylesheet(QApplication.instance(), STATUS_COLUMN_STYLE_FILE)
 
     def _apply_window_icon(self):
         icon_to_use = self._current_icon_path()
-        if not icon_to_use:
+        if not os.path.exists(icon_to_use):
             print(f"[Icon Missing] Not found at: {icon_to_use}.")
             return
 
-        if os.path.exists(icon_to_use):
-            self.setWindowIcon(QIcon(icon_to_use))
+        self.setWindowIcon(QIcon(icon_to_use))
 
     def _setup_table(self):
         self.table_model = QStandardItemModel(0, 3, self)
@@ -238,14 +234,13 @@ class MainWindow(QMainWindow):
         self.tray_icon = QSystemTrayIcon(self)
 
         icon_to_use = self._current_icon_path()
-        if not icon_to_use:
-            print(f"[Icon Missing] Not found at: {icon_to_use}.")
 
         # Load your custom app icon
         if os.path.exists(icon_to_use):
             self.tray_icon.setIcon(QIcon(icon_to_use))
         else:
             # Fallback to a standard system icon if yours is missing
+            print(f"[Icon Missing] Not found at: {icon_to_use}.")
             self.tray_icon.setIcon(
                 self.style().standardIcon(
                     self.style().StandardPixmap.SP_MessageBoxInformation
@@ -304,7 +299,6 @@ class MainWindow(QMainWindow):
         self.tray_icon.hide()  # Remove icon from taskbar
         QApplication.quit()  # Shut down the entire PyQt app
 
-    # --- KEEPING YOUR EXISTING CODE BELOW ---
     def toggle_days_input(self, checked):
         self.ui.Weekdays_lineEdit.setDisabled(checked)
         if checked:
