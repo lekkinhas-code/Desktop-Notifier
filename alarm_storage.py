@@ -1,7 +1,7 @@
 """Reads and writes the alarm list on disk.
 
-Both the GUI and the worker use these functions, so the alarms file is how the
-two processes share state.
+Only the main window calls these: it loads the alarms once at startup and
+saves after every change.
 """
 
 import os
@@ -38,9 +38,3 @@ def save_alarms(alarms):
     os.makedirs(os.path.dirname(ALARMS_FILE), exist_ok=True)
     with open(ALARMS_FILE, "wb") as file:
         pickle.dump(alarms, file)
-
-
-def clear_alarms():
-    """Deletes the alarms file, removing every saved alarm."""
-    if os.path.exists(ALARMS_FILE):
-        os.remove(ALARMS_FILE)

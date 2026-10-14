@@ -1,4 +1,4 @@
-"""Alarm data model shared by the GUI (main.py) and the background worker (worker.py)."""
+"""Alarm data model used by the main window (main.py) and the scheduler (alarm_scheduler.py)."""
 
 import uuid
 from datetime import datetime

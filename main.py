@@ -1,15 +1,13 @@
 """Desktop Notifier: main window and system tray app.
 
 The GUI lets you create, edit, delete and turn alarms on or off. Closing the
-window only hides it to the system tray. The actual alarm checks happen in a
-separate background process (worker.py), which this window starts and stops.
+window only hides it to the system tray, and the alarms keep being checked in
+the background by an AlarmScheduler timer (alarm_scheduler.py). The app only
+stops through the tray's "Exit Completely" option.
 """
 
 import sys
 import os
-import subprocess
-import csv
-import io
 
 from PyQt6.QtWidgets import (
     QMainWindow,
@@ -26,17 +24,18 @@ from PyQt6.QtGui import QStandardItemModel, QStandardItem, QIcon, QCursor
 from PyQt6.QtCore import QTime, qInstallMessageHandler, Qt, QRect, QEvent
 from gui import Ui_MainWindow
 from alarm_model import Alarm, DEFAULT_DAYS, normalize_days
+from alarm_scheduler import AlarmScheduler
 from alarm_storage import load_alarms, save_alarms
 from app_paths import (
     BLACK_ICON_FILE,
     BLACK_ICON_FALLBACK_FILE,
     DARK_THEME_FILE,
     LIGHT_THEME_FILE,
+    SOUND_FILE,
     STATUS_OFF_ICON_FILE,
     STATUS_ON_ICON_FILE,
     WHITE_ICON_FILE,
     WHITE_ICON_FALLBACK_FILE,
-    WORKER_FILE,
     EDIT_BLACK_BUTTON_ICON_FILE,
     EDIT_WHITE_BUTTON_ICON_FILE,
 )
@@ -49,6 +48,7 @@ _APP_MUTEX_HANDLE = None
 if IS_WINDOWS:
     import winreg
     import ctypes
+    import winsound
 
 
 # .ico files only work on Windows, so use the .png versions elsewhere
@@ -141,7 +141,6 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.alarms = []
-        self.worker_process = None
         self._setup_ui()
         self._apply_default_theme()
         self._apply_window_icon()
@@ -151,7 +150,7 @@ class MainWindow(QMainWindow):
         self._setup_navigation()
         self.init_system_tray()
         self.load_alarms()
-        self.start_worker()
+        self._start_scheduler()
 
     # --- Setup ---
 
@@ -332,7 +331,7 @@ class MainWindow(QMainWindow):
         )
 
         quit_action = tray_menu.addAction("Exit Completely")
-        quit_action.triggered.connect(self.completely_quit)  # Closes app and worker
+        quit_action.triggered.connect(self.completely_quit)  # Closes the app and stops alarms
 
         self.tray_icon.setContextMenu(tray_menu)
 
@@ -356,21 +355,21 @@ class MainWindow(QMainWindow):
             # Show a small pop-up bubble letting the user know it's hidden down there
             self.tray_icon.showMessage(
                 "Desktop Notifier",
-                "App minimized to hidden icons. The worker is still active!",
+                "App minimized to hidden icons. Your alarms are still active!",
                 QSystemTrayIcon.MessageIcon.Information,
                 2000,
             )
-            print("GUI minimized to system tray. Worker remains alive.")
+            print("GUI minimized to system tray. Alarms remain active.")
+        else:
+            # No tray icon to come back from (e.g. Explorer isn't running), so
+            # quit for real instead of leaving an invisible app running
+            self.completely_quit()
 
     def completely_quit(self):
-        """The true exit function triggered only via the tray's right-click menu."""
-        print("Closing application and terminating background worker...")
+        """The true exit function, triggered via the tray's right-click menu."""
+        print("Closing application and stopping alarms...")
 
-        # Clean up the worker process
-        if self.worker_process and self.worker_process.poll() is None:
-            self.worker_process.terminate()
-            self.worker_process.wait()
-
+        self.scheduler.stop()
         self.tray_icon.hide()  # Remove the icon from the system tray
         QApplication.quit()  # Shut down the entire PyQt app
 
@@ -420,14 +419,11 @@ class MainWindow(QMainWindow):
                 [QStandardItem(alarm.time_str), QStandardItem(alarm.title), status_item]
             )
 
-    # Before changing the list, the methods below reload it from disk so they
-    # don't overwrite what the worker saved (e.g. last_triggered_date).
-    # If the file can't be read, the in-memory list is used instead.
+    # self.alarms is the only copy of the alarm list: the scheduler reads it and
+    # every change is saved straight to disk, so it never needs reloading.
 
     def add_alarm(self):
         """Creates a new alarm from the form and saves it."""
-        self.alarms = load_alarms(self.alarms)
-
         self.alarms.append(self._build_alarm_from_form())
         self._persist_alarm_changes(reset_form=True)
 
@@ -435,14 +431,11 @@ class MainWindow(QMainWindow):
         """Deletes the alarm selected in the table."""
         selected_indexes = self.ui.Alert_tableView.selectionModel().selectedRows()
         if selected_indexes:
-            self.alarms = load_alarms(self.alarms)
-
             del self.alarms[selected_indexes[0].row()]
             self._persist_alarm_changes()
 
     def update_alarm(self):
         """Saves the form's values over the alarm being edited and leaves edit mode."""
-        self.alarms = load_alarms(self.alarms)
         for alarm in self.alarms:
             if getattr(alarm, "id", None) == self.editing_alarm_id:
                 alarm.time_str = self.ui.Alert_timeEdit.time().toString("HH:mm")
@@ -484,7 +477,6 @@ class MainWindow(QMainWindow):
         if not selected_indexes:
             return
 
-        self.alarms = load_alarms(self.alarms)
         row = selected_indexes[0].row()
         if row < 0 or row >= len(self.alarms):
             return
@@ -504,71 +496,44 @@ class MainWindow(QMainWindow):
         # normalize_days also repairs alarms saved by the old text field (e.g. "Mon")
         self._set_selected_days(normalize_days(alarm.days))
 
-    # --- Background worker ---
+    # --- Alarms going off ---
 
-    def start_worker(self):
-        """Starts worker.py as a hidden background process."""
-        if os.path.exists(WORKER_FILE):
-            # Make sure only one worker ever runs
-            self._terminate_stale_workers()
-            self.worker_process = subprocess.Popen(
-                [sys.executable, WORKER_FILE, "--background"],
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-            )
-            print(f"[GUI] Spawned worker process at: {WORKER_FILE}")
-        else:
-            print(f"[GUI ERROR] Could not find worker.py at target path: {WORKER_FILE}")
+    def _start_scheduler(self):
+        """Starts checking the alarms once a minute, for as long as the app runs."""
+        self.scheduler = AlarmScheduler(lambda: self.alarms, parent=self)
+        self.scheduler.alarm_triggered.connect(self.on_alarm_triggered)
+        self.scheduler.start()
 
-    def _terminate_stale_workers(self):
-        """
-        Kills worker processes left over from earlier runs (Windows only).
+    def on_alarm_triggered(self, alarm):
+        """Shows the notification, plays the sound and saves the alarm's new state."""
+        icon_path = self._current_icon_path()
+        # Shown by the tray icon as a native Windows notification. Unlike plyer,
+        # this returns straight away, so the window never freezes.
+        self.tray_icon.showMessage(
+            alarm.title,
+            f"It's {alarm.time_str}!",
+            QIcon(icon_path) if os.path.exists(icon_path) else self.tray_icon.icon(),
+            10000,  # Notification disappears after 10 seconds
+        )
+        self._play_alarm_sound()
 
-        A worker can outlive the GUI, for example if the GUI crashes. PowerShell
-        lists every process started with "worker.py ... --background", and each
-        one is force-closed with taskkill.
-        """
+        # The scheduler set last_triggered_date; save it so a restart in the
+        # same minute doesn't fire the alarm again
+        self.save_alarms()
+
+    def _play_alarm_sound(self):
+        """Plays the alarm sound without blocking, or a system beep if it's missing."""
         if not IS_WINDOWS:
+            QApplication.beep()
             return
 
-        try:
-            result = subprocess.run(
-                [
-                    "powershell",
-                    "-NoProfile",
-                    "-Command",
-                    "Get-CimInstance Win32_Process | "
-                    "Where-Object { $_.CommandLine -like '*worker.py*' -and $_.CommandLine -like '*--background*' } | "
-                    "Select-Object ProcessId,CommandLine | "
-                    "ConvertTo-Csv -NoTypeInformation",
-                ],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-        except Exception as error:
-            print(f"[GUI] Could not scan for stale workers: {error}")
-            return
-
-        reader = csv.DictReader(io.StringIO(result.stdout))
-        for row in reader:
-            try:
-                pid = int(row["ProcessId"])
-            except (KeyError, TypeError, ValueError):
-                continue
-
-            if pid == os.getpid():
-                continue
-
-            try:
-                subprocess.run(
-                    ["taskkill", "/PID", str(pid), "/F"],
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                print(f"[GUI] Terminated stale worker PID {pid}.")
-            except Exception as error:
-                print(f"[GUI] Could not terminate stale worker PID {pid}: {error}")
+        if os.path.exists(SOUND_FILE):
+            # Plays the custom .wav file asynchronously (doesn't freeze the window)
+            winsound.PlaySound(SOUND_FILE, winsound.SND_FILENAME | winsound.SND_ASYNC)
+        else:
+            # Default system beep fallback if the file is missing
+            print(f"[Audio Error] File missing at: {SOUND_FILE}")
+            winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
 
     # --- Helpers ---
 
@@ -708,6 +673,9 @@ if __name__ == "__main__":
     if not acquire_single_instance_lock():
         sys.exit(0)
     app = QApplication(sys.argv)
+    # The app lives in the tray, so hiding or closing windows must never quit it;
+    # only completely_quit() does
+    app.setQuitOnLastWindowClosed(False)
     window = MainWindow()
     window.show()
     sys.exit(app.exec())

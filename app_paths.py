@@ -8,9 +8,8 @@ import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Saved alarms and the background worker script
+# Saved alarms
 ALARMS_FILE = os.path.join(BASE_DIR, "Alarms", "alarms.pkl")
-WORKER_FILE = os.path.join(BASE_DIR, "worker.py")
 
 # Qt stylesheets for the two themes
 DARK_THEME_FILE = os.path.join(BASE_DIR, "UI", "style", "darkTheme_styles.qss")

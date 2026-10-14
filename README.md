@@ -1,16 +1,17 @@
 # Desktop Notifier
 
-A sleek, native Windows desktop notification utility built with **Python**, **PyQt6**, and **Plyer**. The application uses a split-process architecture to separate the management interface from the time-tracking worker, ensuring lightweight background execution.
+A sleek, native Windows desktop notification utility built with **Python** and **PyQt6**. A single lightweight process manages your alarms and keeps checking them from the system tray, even while the window is closed.
 
 ---
 
 ## Key Features
 
-- **Dual-Process Architecture:** A PyQt6 GUI manages your custom alert schedule, while a completely hidden, zero-overhead background worker process (`worker.py`) handles clock synchronization.
+- **Single-Process Scheduler:** The alarm checks run on a timer inside the app itself (`alarm_scheduler.py`), so there is no hidden background process to manage, and the alarm list has a single owner that saves every change.
 - **System Tray Integration:** Closing the GUI window minimizes the application directly to the Windows Hidden Icons drawer, keeping it alive out of sight.
-- **Smart Time Synchronization:** The worker loop dynamically calculates precise micro-sleep intervals, firing notifications down to the exact millisecond the clock turns without draining CPU resources.
+- **Native Notifications:** Alarms show up as native Windows notifications through the tray icon, without ever freezing the window.
+- **Smart Time Synchronization:** The scheduler calculates the exact time left until the next minute, firing notifications right as the clock turns without draining CPU resources.
 - **Dynamic Theme Adaptation:** Automatically reads the Windows Registry on startup to serve a contrasting white icon for Dark Mode or a black icon for Light Mode taskbars.
-- **Singleton Lock:** Uses native Windows Mutex controls to prevent accidental duplicate instances of the application or duplicate worker threads.
+- **Singleton Lock:** Uses native Windows Mutex controls to prevent accidental duplicate instances of the application.
 
 ---
 
@@ -19,7 +20,7 @@ A sleek, native Windows desktop notification utility built with **Python**, **Py
 ```text
 Desktop-Notifier/
 ├── main.py                # Main PyQt6 graphical management menu
-├── worker.py              # Stealth CLI/Background alert checking worker
+├── alarm_scheduler.py     # Timer that checks the alarms once a minute
 ├── alarm_model.py         # Shared blueprint/object rules for Alarm serialization
 ├── gui.py                 # Generated UI interface from Qt Designer
 ├── image/
@@ -46,7 +47,7 @@ python --version
 Install the required external libraries with pip:
 
 ```bash
-pip install PyQt6 plyer
+pip install PyQt6
 ```
 
 Libraries such as winsound, winreg and ctypes are built into python on Windows platforms.
@@ -78,4 +79,4 @@ Here are some of the features and improvements I imagined for the app and plan o
 - [ ] **Next Alarm Display:** Show a countdown to the next alarm in the table, the tray tooltip and the status bar (e.g. "Next: Morning workout in 2h 14m").
 - [ ] **Sort, Search & Duplicate:** Sort and search the alarm list, and duplicate an existing alarm to quickly create a similar one.
 - [ ] **Ring Until Dismissed:** Option to keep the sound ringing (or repeat it N times) until the alarm is dismissed, plus a volume setting.
-- [ ] **Health Indicator:** Warn through the tray icon or status bar if the background worker stops or the alarm checks fall behind.
+- [ ] **Health Indicator:** Warn through the tray icon or status bar if the alarm checks stop or fall behind.
