@@ -15,6 +15,24 @@ DEFAULT_DAYS = [
 ]
 
 
+def normalize_days(days):
+    """
+    Converts day names to the full names in DEFAULT_DAYS, in week order.
+
+    Accepts any capitalisation and abbreviations of 3+ letters ("mon", "Tues.",
+    "WEDNESDAY"). Unrecognised names are dropped. This repairs alarms saved by
+    the old text field, which stored whatever was typed (e.g. "Mon").
+    """
+    cleaned = {str(day).strip().rstrip(".").lower() for day in days}
+    return [
+        full_name
+        for full_name in DEFAULT_DAYS
+        if any(
+            len(name) >= 3 and full_name.lower().startswith(name) for name in cleaned
+        )
+    ]
+
+
 class Alarm:
     """A single repeating alarm, stored on disk by alarm_storage."""
 
@@ -56,7 +74,7 @@ class Alarm:
         if (
             self.is_active
             and self.time_str == current_time
-            and current_day in self.days
+            and current_day in normalize_days(self.days)
             and self.last_triggered_date != current_date
         ):
             return True

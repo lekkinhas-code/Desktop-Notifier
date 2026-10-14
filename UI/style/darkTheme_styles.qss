@@ -154,30 +154,56 @@ QTimeEdit::down-arrow:hover {
     border-top-color: #F5A623;
 }
 
-/* ---------------- Radio button ---------------- */
+/* ---------------- Day toggles (alarm days row) ---------------- */
 
-QRadioButton {
-    color: #EDEFF5;
-    font-size: 13px;
-    spacing: 10px;
-    background: transparent;
-}
-
-QRadioButton::indicator {
-    width: 18px;
-    height: 18px;
-    border-radius: 9px;
-    border: 2px solid #3B4157;
+/* Unselected: same look as the inputs */
+QPushButton[dayToggle="true"] {
     background-color: #262A3A;
+    color: #8A90A3;
+    border: 1px solid #2E3345;
+    border-radius: 8px;
+    padding: 0px;
+    font-size: 13px;
+    font-weight: 600;
 }
 
-QRadioButton::indicator:hover {
-    border: 2px solid #F5A623;
+QPushButton[dayToggle="true"]:hover {
+    border: 1px solid #3B4157;
+    color: #EDEFF5;
 }
 
-QRadioButton::indicator:checked {
-    border: 2px solid #F5A623;
+QPushButton[dayToggle="true"]:focus {
+    border: 1px solid #F5A623;
+}
+
+/* Selected: amber accent, like the Create button */
+QPushButton[dayToggle="true"]:checked {
     background-color: #F5A623;
+    color: #14161F;
+    border: 1px solid #F5A623;
+}
+
+QPushButton[dayToggle="true"]:checked:hover {
+    background-color: #FFB238;
+    border: 1px solid #FFB238;
+}
+
+QPushButton[dayToggle="true"]:checked:focus {
+    border: 1px solid #D98A12;
+}
+
+QPushButton[dayToggle="true"]:pressed {
+    background-color: #D98A12;
+    border: 1px solid #D98A12;
+}
+
+/* Summary under the days row ("Every day", "Weekdays", ...) */
+QLabel#DaysSummary_label {
+    font-size: 12px;
+}
+
+QLabel#DaysSummary_label[warning="true"] {
+    color: #E5484D;
 }
 
 /* ---------------- Buttons ---------------- */
@@ -208,6 +234,12 @@ QPushButton#Create_pushButton:hover {
 
 QPushButton#Create_pushButton:pressed {
     background-color: #D98A12;
+}
+
+/* Disabled while the form is incomplete (e.g. no days selected) */
+QPushButton#Create_pushButton:disabled {
+    background-color: #262A3A;
+    color: #565C70;
 }
 
 QPushButton#Delete_pushButton {

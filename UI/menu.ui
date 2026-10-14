@@ -228,7 +228,7 @@
                                             <item>
                                                 <widget class="QLabel" name="Days_label">
                                                     <property name="text">
-                                                        <string>Write the days the alarm should be activated, separated by commas ( , ).</string>
+                                                        <string>What days should the alarm go off?</string>
                                                     </property>
                                                     <property name="wordWrap">
                                                         <bool>true</bool>
@@ -236,26 +236,16 @@
                                                 </widget>
                                             </item>
                                             <item>
-                                                <widget class="QLineEdit" name="Weekdays_lineEdit">
-                                                    <property name="minimumSize">
-                                                        <size>
-                                                            <width>0</width>
-                                                            <height>40</height>
-                                                        </size>
+                                                <layout class="QHBoxLayout" name="daysLayout">
+                                                    <property name="spacing">
+                                                        <number>6</number>
                                                     </property>
-                                                    <property name="placeholderText">
-                                                        <string>Mon, Tue, Wed...</string>
-                                                    </property>
-                                                </widget>
+                                                </layout>
                                             </item>
                                             <item>
-                                                <widget class="QRadioButton"
-                                                    name="Diary_radioButton">
-                                                    <property name="cursor">
-                                                        <cursorShape>PointingHandCursor</cursorShape>
-                                                    </property>
+                                                <widget class="QLabel" name="DaysSummary_label">
                                                     <property name="text">
-                                                        <string>Diary?</string>
+                                                        <string>Every day</string>
                                                     </property>
                                                 </widget>
                                             </item>

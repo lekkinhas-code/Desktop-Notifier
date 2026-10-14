@@ -20,11 +20,12 @@ from PyQt6.QtWidgets import (
     QStyledItemDelegate,
     QStyle,
     QPushButton,
+    QSizePolicy,
 )
 from PyQt6.QtGui import QStandardItemModel, QStandardItem, QIcon, QCursor
 from PyQt6.QtCore import QTime, qInstallMessageHandler, Qt, QRect, QEvent
 from gui import Ui_MainWindow
-from alarm_model import Alarm, DEFAULT_DAYS
+from alarm_model import Alarm, DEFAULT_DAYS, normalize_days
 from alarm_storage import load_alarms, save_alarms
 from app_paths import (
     BLACK_ICON_FILE,
@@ -200,8 +201,7 @@ class MainWindow(QMainWindow):
         self.editing_alarm_id = None
 
         self.ui.Alert_timeEdit.setTime(QTime.currentTime())
-        self.ui.Diary_radioButton.setChecked(True)
-        self.ui.Weekdays_lineEdit.setDisabled(True)
+        self._setup_day_buttons()
         self.ui.Theme_comboBox.setCurrentText("Dark Mode")
 
         # The Edit button isn't in menu.ui, so it is created here and placed
@@ -216,12 +216,36 @@ class MainWindow(QMainWindow):
             self.Edit_pushButton,
         )
 
+    def _setup_day_buttons(self):
+        """
+        Fills the form's days row with one toggle button per weekday.
+
+        The buttons are built from DEFAULT_DAYS, so the form can only ever
+        produce valid full day names. All seven start selected (every day).
+        """
+        self.day_buttons = {}
+        for day in DEFAULT_DAYS:
+            button = QPushButton(day[:3])  # "Monday" -> "Mon"
+            button.setCheckable(True)
+            button.setChecked(True)
+            button.setToolTip(day)
+            # Styled in the .qss files with QPushButton[dayToggle="true"]
+            button.setProperty("dayToggle", True)
+            button.setMinimumSize(32, 40)
+            # Share the row's width evenly so it lines up with the inputs above
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+            button.toggled.connect(self._update_days_summary)
+            self.ui.daysLayout.addWidget(button)
+            self.day_buttons[day] = button
+
+        self._update_days_summary()
+
     def _connect_signals(self):
         """Connects buttons, inputs and the table to their handlers."""
         self.ui.Create_pushButton.clicked.connect(self.handle_save_clicked)
         self.ui.Delete_pushButton.clicked.connect(self.delete_alarm)
         self.Edit_pushButton.clicked.connect(self.handle_edit_alarm)
-        self.ui.Diary_radioButton.toggled.connect(self.toggle_days_input)
         self.ui.Theme_comboBox.currentTextChanged.connect(self.on_theme_changed)
         self.table_model.itemChanged.connect(self.toggle_alarm_state)
 
@@ -352,12 +376,6 @@ class MainWindow(QMainWindow):
 
     # --- Alarm list ---
 
-    def toggle_days_input(self, checked):
-        """Disables and clears the weekdays field while "Diary?" (every day) is checked."""
-        self.ui.Weekdays_lineEdit.setDisabled(checked)
-        if checked:
-            self.ui.Weekdays_lineEdit.clear()
-
     def toggle_alarm_state(self, item):
         """Saves an alarm's new on/off state after its Status toggle is clicked."""
         if item.column() != 2:
@@ -429,11 +447,7 @@ class MainWindow(QMainWindow):
             if getattr(alarm, "id", None) == self.editing_alarm_id:
                 alarm.time_str = self.ui.Alert_timeEdit.time().toString("HH:mm")
                 alarm.title = self.ui.Name_lineEdit.text().strip() or "Alarm Alert!"
-                alarm.days = (
-                    DEFAULT_DAYS
-                    if self._selected_days() is None
-                    else self._selected_days()
-                )
+                alarm.days = self._selected_days()
                 # Let the edited alarm fire again today, even if it already went off
                 alarm.last_triggered_date = None
                 break
@@ -443,6 +457,10 @@ class MainWindow(QMainWindow):
 
     def handle_save_clicked(self):
         """Handles the Create/Update button: updates in edit mode, otherwise creates."""
+        # The button is disabled with no days selected; this guards e.g. the Enter key
+        if not self._selected_days():
+            return
+
         if self.editing_alarm_id is not None:
             # STATE A: We are in 'Edit Mode' -> Update existing
             self.update_alarm()
@@ -483,17 +501,8 @@ class MainWindow(QMainWindow):
         """Fills the form with an existing alarm's name, time and days."""
         self.ui.Name_lineEdit.setText(alarm.title)
         self.ui.Alert_timeEdit.setTime(QTime.fromString(alarm.time_str, "HH:mm"))
-
-        is_everyday = set(alarm.days) == set(DEFAULT_DAYS)
-        if is_everyday:
-            self.ui.Diary_radioButton.setChecked(True)
-            self.ui.Weekdays_lineEdit.clear()
-            self.ui.Weekdays_lineEdit.setDisabled(True)
-        else:
-            self.ui.Diary_radioButton.setChecked(False)
-            days_str = ", ".join(alarm.days)
-            self.ui.Weekdays_lineEdit.setText(days_str)
-            self.ui.Weekdays_lineEdit.setDisabled(False)
+        # normalize_days also repairs alarms saved by the old text field (e.g. "Mon")
+        self._set_selected_days(normalize_days(alarm.days))
 
     # --- Background worker ---
 
@@ -593,21 +602,47 @@ class MainWindow(QMainWindow):
         return DARK_THEME_FILE
 
     def _selected_days(self):
-        """
-        Returns the days typed in the form as a list.
+        """Returns the full names of the selected days, in week order."""
+        return [day for day, button in self.day_buttons.items() if button.isChecked()]
 
-        Returns None (meaning every day) if "Diary?" is checked or the field is empty.
-        """
-        if self.ui.Diary_radioButton.isChecked():
-            return None
+    def _set_selected_days(self, days):
+        """Selects exactly the given days in the days row."""
+        for day, button in self.day_buttons.items():
+            # Block signals so the summary is only updated once, at the end
+            button.blockSignals(True)
+            button.setChecked(day in days)
+            button.blockSignals(False)
+        self._update_days_summary()
 
-        raw_days = self.ui.Weekdays_lineEdit.text()
-        # "monday, friday" -> ["Monday", "Friday"]
-        return (
-            [day.strip().capitalize() for day in raw_days.split(",") if day.strip()]
-            if raw_days.strip()
-            else None
-        )
+    def _update_days_summary(self):
+        """
+        Describes the selected days under the days row.
+
+        Also disables the Create/Update button when no day is selected, since
+        an alarm without days would never go off.
+        """
+        selected = self._selected_days()
+
+        if not selected:
+            summary = "Pick at least one day"
+        elif selected == DEFAULT_DAYS:
+            summary = "Every day"
+        elif selected == DEFAULT_DAYS[:5]:
+            summary = "Weekdays"
+        elif selected == DEFAULT_DAYS[5:]:
+            summary = "Weekends"
+        else:
+            summary = ", ".join(day[:3] for day in selected)
+
+        label = self.ui.DaysSummary_label
+        label.setText(summary)
+        # The "warning" property switches the label to the warning colour in the .qss
+        # files; re-polishing makes Qt apply the style change straight away
+        label.setProperty("warning", not selected)
+        label.style().unpolish(label)
+        label.style().polish(label)
+
+        self.ui.Create_pushButton.setEnabled(bool(selected))
 
     def _build_alarm_from_form(self):
         """Creates a new Alarm from the form's current values."""
@@ -620,9 +655,7 @@ class MainWindow(QMainWindow):
     def _reset_alarm_form(self):
         """Clears the form and switches it back to "New Alarm" mode."""
         self.ui.Name_lineEdit.clear()
-        self.ui.Weekdays_lineEdit.clear()
-        self.ui.Diary_radioButton.setChecked(True)
-        self.ui.Weekdays_lineEdit.setDisabled(True)
+        self._set_selected_days(DEFAULT_DAYS)
         self.ui.Alert_timeEdit.setTime(QTime.currentTime())
         self.ui.Title_label.setText("New Alarm")
         self.ui.Create_pushButton.setText("Create New Alarm")
