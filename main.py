@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QSizePolicy,
 )
-from PyQt6.QtGui import QStandardItemModel, QStandardItem, QIcon, QCursor
+from PyQt6.QtGui import QStandardItemModel, QStandardItem, QIcon, QCursor, QPixmap
 from PyQt6.QtCore import QTime, qInstallMessageHandler, Qt, QRect, QEvent
 from gui import Ui_MainWindow
 from alarm_model import Alarm, DEFAULT_DAYS, normalize_days
@@ -41,6 +41,7 @@ from app_paths import (
 )
 
 IS_WINDOWS = os.name == "nt"
+SM_CXICON = 11  # GetSystemMetrics index for the system's standard icon width
 SINGLE_INSTANCE_MUTEX_NAME = "Global\\DesktopNotifier_SingleInstance_Mutex_Lock"
 # Kept for the app's whole lifetime: Windows releases the mutex when the handle closes
 _APP_MUTEX_HANDLE = None
@@ -506,13 +507,12 @@ class MainWindow(QMainWindow):
 
     def on_alarm_triggered(self, alarm):
         """Shows the notification, plays the sound and saves the alarm's new state."""
-        icon_path = self._current_icon_path()
         # Shown by the tray icon as a native Windows notification. Unlike plyer,
         # this returns straight away, so the window never freezes.
         self.tray_icon.showMessage(
             alarm.title,
             f"It's {alarm.time_str}!",
-            QIcon(icon_path) if os.path.exists(icon_path) else self.tray_icon.icon(),
+            self._notification_icon(),
             10000,  # Notification disappears after 10 seconds
         )
         self._play_alarm_sound()
@@ -520,6 +520,31 @@ class MainWindow(QMainWindow):
         # The scheduler set last_triggered_date; save it so a restart in the
         # same minute doesn't fire the alarm again
         self.save_alarms()
+
+    def _notification_icon(self):
+        """
+        Returns the app icon at exactly the size Windows wants in a notification.
+
+        Windows silently drops a tray notification whose custom icon isn't exactly
+        the system icon size (SM_CXICON), which grows with display scaling: 40 px
+        at 125%, not the .ico's 32 px. So the 512 px .png is scaled to that size.
+        Falls back to the standard info icon if the .png is missing.
+        """
+        icon_path = WHITE_ICON_FALLBACK_FILE if self.is_dark_mode() else BLACK_ICON_FALLBACK_FILE
+        pixmap = QPixmap(icon_path)
+        if pixmap.isNull():
+            print(f"[Icon Missing] Not found at: {icon_path}.")
+            return QSystemTrayIcon.MessageIcon.Information
+
+        if IS_WINDOWS:
+            size = ctypes.windll.user32.GetSystemMetrics(SM_CXICON)
+            pixmap = pixmap.scaled(
+                size,
+                size,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        return QIcon(pixmap)
 
     def _play_alarm_sound(self):
         """Plays the alarm sound without blocking, or a system beep if it's missing."""
