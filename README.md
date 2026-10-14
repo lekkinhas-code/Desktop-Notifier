@@ -10,7 +10,8 @@ A sleek, native Windows desktop notification utility built with **Python** and *
 - **System Tray Integration:** Closing the GUI window minimizes the application directly to the Windows Hidden Icons drawer, keeping it alive out of sight.
 - **Native Notifications:** Alarms show up as native Windows notifications through the tray icon, without ever freezing the window.
 - **Smart Time Synchronization:** The scheduler calculates the exact time left until the next minute, firing notifications right as the clock turns without draining CPU resources.
-- **Dynamic Theme Adaptation:** Automatically reads the Windows Registry on startup to serve a contrasting white icon for Dark Mode or a black icon for Light Mode taskbars.
+- **Weekly Schedules:** Pick the days each alarm repeats on with a row of day toggles, and turn alarms on or off or edit them at any time.
+- **Dynamic Theme Adaptation:** Automatically reads the Windows Registry to serve a contrasting white icon for Dark Mode or a black icon for Light Mode taskbars, and the window can follow the system theme or use a Dark or Light theme.
 - **Singleton Lock:** Uses native Windows Mutex controls to prevent accidental duplicate instances of the application.
 
 ---
@@ -19,17 +20,24 @@ A sleek, native Windows desktop notification utility built with **Python** and *
 
 ```text
 Desktop-Notifier/
-├── main.py                # Main PyQt6 graphical management menu
+├── main.py                # Main PyQt6 window, system tray and notifications
 ├── alarm_scheduler.py     # Timer that checks the alarms once a minute
-├── alarm_model.py         # Shared blueprint/object rules for Alarm serialization
-├── gui.py                 # Generated UI interface from Qt Designer
+├── alarm_model.py         # Alarm object and day-name rules
+├── alarm_storage.py       # Loads and saves the alarm list
+├── app_paths.py           # Absolute paths to every file the app uses
+├── gui.py                 # Generated UI interface from Qt Designer (from UI/menu.ui)
+├── requirements.txt       # Python dependencies
+├── UI/
+│   ├── menu.ui            # Qt Designer layout
+│   ├── style/             # Dark and light theme stylesheets (.qss)
+│   └── images/            # Toggle, arrow and edit button icons
 ├── image/
-│   ├── alarm_icon_light.ico  # White icon variant (for Dark Taskbars)
-│   └── alarm_icon_dark.ico   # Black icon variant (for Light Taskbars)
+│   ├── alarm_icon.ico / .png        # Black icon variant (for Light Taskbars)
+│   └── alarm_icon_white.ico / .png  # White icon variant (for Dark Taskbars)
 ├── audio/
 │   └── alarm_sound.wav    # Custom alert audio file
-└── Desktop-Notifier/
-    └── alarms.pkl         # Local persistent binary storage file for alerts
+└── Alarms/
+    └── alarms.pkl         # Local persistent binary storage file for alerts (created on first save)
 ```
 
 ## Installation & Setup
@@ -47,14 +55,14 @@ python --version
 Install the required external libraries with pip:
 
 ```bash
-pip install PyQt6
+pip install -r requirements.txt
 ```
 
 Libraries such as winsound, winreg and ctypes are built into python on Windows platforms.
 
 ### 3. Running the App
 
-To launch the complete application with the management window interface and hidden system tracking, run:
+To launch the application with the management window and its system tray icon, run:
 
 ```bash
 python main.py
